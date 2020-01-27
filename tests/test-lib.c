@@ -1,3 +1,26 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2020 vzvca
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 #include <check.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -14,32 +37,32 @@ void post_hook_func(scheduler_t *sched, void *extra)
   debug("post-hook.\n");
 }
 
-// initialisation function called
+/* initialisation function called */
 void init_func( fiber_t *fiber )
 {
   info("Fiber %d init func called\n", fiber->fid);
 }
 
-// term function called
+/* term function called */
 void term_func( fiber_t *fiber )
 {
   info("Fiber %d term func called\n", fiber->fid);
 }
 
-// done function called
+/* done function called */
 void done_func( fiber_t *fiber )
 {
   info("Fiber %d done func called\n", fiber->fid);
 }
 
-// fiber will stop after 1 yield
+/* fiber will stop after 1 yield */
 void run_1iter( fiber_t *fiber )
 {
   fiber_yield(fiber);
   return;
 }
 
-// fiber will stop after 2 yield
+/* fiber will stop after 2 yield */
 void run_2iter( fiber_t *fiber )
 {
   fiber_yield(fiber);
@@ -47,20 +70,20 @@ void run_2iter( fiber_t *fiber )
   return;
 }
 
-// infinite loop
+/* infinite loop */
 void run_forever( fiber_t *fiber )
 {
   while(1) fiber_yield(fiber);
 }
 
-// does nothing returns immediatly
+/* does nothing returns immediatly */
 void run_done( fiber_t *fiber )
 {
   debug("fiber %d : done.\n", fiber->fid);
   return;
 }
 
-// wait for 1 second
+/* wait for 1 second */
 void run_wait( fiber_t *fiber )
 {
   info("fiber %d : waiting for 1 second.\n", fiber->fid);
@@ -68,7 +91,7 @@ void run_wait( fiber_t *fiber )
   info("fiber %d : done waiting for 1 second.\n", fiber->fid);
 }
 
-// wait for 1 sec max that the variable waitvar gets incremeted
+/* wait for 1 sec max that the variable waitvar gets incremeted */
 int waitvar = 0;
 void run_wait_var( fiber_t *fiber )
 {
@@ -78,7 +101,7 @@ void run_wait_var( fiber_t *fiber )
   debug("fiber %d : done waiting (result %d) waitvar is now %d.\n", fiber->fid, res, waitvar);
 }
 
-// used for predicate testing
+/* used for predicate testing */
 static int pred_wait_cond(fiber_t *fiber, void *arg)
 {
   int *iarg = (int*) arg;
@@ -92,8 +115,8 @@ void run_wait_cond( fiber_t *fiber )
   debug("fiber %d : done waiting (result %d)..\n", fiber->fid, res);
 }
 
-// fiber that spawn a new fiber each time it gets called
-// the new fiber uses the fiber_forever function
+/* fiber that spawn a new fiber each time it gets called
+ * the new fiber uses the fiber_forever function */
 void run_spawn_forever( fiber_t *fiber )
 {
   while(1) {
@@ -103,8 +126,8 @@ void run_spawn_forever( fiber_t *fiber )
   }
 }
 
-// fiber that spawn a new fiber each time it gets called
-// the new fiber uses the fiber_done function
+/* fiber that spawn a new fiber each time it gets called
+ * the new fiber uses the fiber_done function */
 void run_spawn_done( fiber_t *fiber )
 {
   while(1) {
@@ -115,8 +138,8 @@ void run_spawn_done( fiber_t *fiber )
 }
 
 
-// fiber that spawn a fiber that terminate immediatly (fiber_done used)
-// then wait for it to finish
+/* fiber that spawn a fiber that terminate immediatly (fiber_done used)
+ * then wait for it to finish */
 void run_spawn_join_done( fiber_t *fiber )
 {
   fiber_t **ppf = (fiber_t**) fiber_get_extra( fiber );
@@ -130,8 +153,8 @@ void run_spawn_join_done( fiber_t *fiber )
   debug("Done waiting ");
 }
 
-// fiber that spawn a fiber that terminate immediatly (fiber_done used)
-// then wait for it to finish
+/* fiber that spawn a fiber that terminate immediatly (fiber_done used)
+ * then wait for it to finish */
 void run_spawn_join_forever( fiber_t *fiber )
 {
   fiber_t **ppf = (fiber_t**) fiber_get_extra( fiber );
@@ -145,8 +168,8 @@ void run_spawn_join_forever( fiber_t *fiber )
   debug("Done waiting ");
 }
 
-// fiber that spawn a fiber that terminate immediatly (fiber_done used)
-// then wait for it to finish
+/* fiber that spawn a fiber that terminate immediatly (fiber_done used)
+ * then wait for it to finish */
 void run_spawn_join_wait_var( fiber_t *fiber )
 {
   fiber_t **ppf = (fiber_t**) fiber_get_extra( fiber );
@@ -160,8 +183,9 @@ void run_spawn_join_wait_var( fiber_t *fiber )
   debug("Done waiting ");
 }
 
-// --------------------------------------------------------------------------
-//   scheduler with a single never ending fiber  
+/* --------------------------------------------------------------------------
+ *   scheduler with a single never ending fiber  
+ * --------------------------------------------------------------------------*/
 START_TEST (test_no_fiber)
 {
   scheduler_t *sched = scheduler_new();
@@ -169,21 +193,22 @@ START_TEST (test_no_fiber)
 
   ck_assert_int_eq(sched_get_num_fibers(sched), 0);
   
-  // run the scheduler 1000 times
+  /* run the scheduler 1000 times */
   for( n = 0; n < 1000; ++n ) {
     sched_cycle( sched, sched_elapsed());
   }
 
   ck_assert_int_eq(sched_get_num_fibers(sched), 0);
 
-  // clean
+  /* clean */
   scheduler_free( sched );
 }
 END_TEST
 
 
-// --------------------------------------------------------------------------
-//   scheduler with a single never ending fiber  
+/* --------------------------------------------------------------------------
+ *   scheduler with a single never ending fiber  
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_forever)
 {
   scheduler_t *sched = scheduler_new();
@@ -196,22 +221,23 @@ START_TEST (test_single_fiber_forever)
   fiber_start( sched, f1);
   ck_assert_int_eq(sched_get_num_fibers(sched), 1);
   
-  // run the scheduler 1000 times
+  /* run the scheduler 1000 times */
   for( n = 0; n < 1000; ++n ) {
     sched_cycle( sched, sched_elapsed());
   }
 
-  // test fiber still there
+  /* test fiber still there */
   ck_assert_int_eq(sched_get_num_fibers(sched), 1);
 
-  // clean
+  /* clean */
   scheduler_free( sched );
   fiber_free( f1 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   scheduler with a single immediatly ending fiber
+/* --------------------------------------------------------------------------
+ *   scheduler with a single immediatly ending fiber
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_done)
 {
   scheduler_t *sched = scheduler_new();
@@ -220,7 +246,7 @@ START_TEST (test_single_fiber_done)
   
   f1 = fiber_new(run_done, NULL);
 
-  // start the fiber
+  /* start the fiber */
   ck_assert_int_eq(sched_get_num_fibers(sched), 0);
   fiber_start( sched, f1);
   ck_assert_int_eq(sched_get_num_fibers(sched), 1);

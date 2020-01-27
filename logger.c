@@ -1,3 +1,27 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2020 vzvca
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 #include <sys/time.h>
 #include <time.h>
 #include <stdio.h>
@@ -16,14 +40,14 @@ enum log_level_e {
   LOG_TRACE
 };
 
-// --------------------------------------------------------------------------
-//  LOG level
-// --------------------------------------------------------------------------
+/* --------------------------------------------------------------------------
+ *  LOG level
+ * --------------------------------------------------------------------------*/
 static uint8_t log_level = LOG_INFO;
 
-// --------------------------------------------------------------------------
-//   Prefix for log messages
-// --------------------------------------------------------------------------
+/* --------------------------------------------------------------------------
+ *   Prefix for log messages
+ * --------------------------------------------------------------------------*/
 void log_prefix( FILE *fout, uint8_t level)
 {
   char *s = "?????";
@@ -50,9 +74,9 @@ void log_prefix( FILE *fout, uint8_t level)
   fprintf( fout, "%s - [%s] - ", buf, s);
 }
 
-// --------------------------------------------------------------------------
-//   information level
-// --------------------------------------------------------------------------
+/* --------------------------------------------------------------------------
+ *   information level
+ * --------------------------------------------------------------------------*/
 void info( const char *fmt, ...)
 {
   va_list va;
@@ -64,9 +88,9 @@ void info( const char *fmt, ...)
   }
 }
 
-// --------------------------------------------------------------------------
-//   information level
-// --------------------------------------------------------------------------
+/* --------------------------------------------------------------------------
+ *   debug level
+ * --------------------------------------------------------------------------*/
 void debug( const char *fmt, ...)
 {
   va_list va;
@@ -78,9 +102,9 @@ void debug( const char *fmt, ...)
   }
 }
 
-// --------------------------------------------------------------------------
-//   information level
-// --------------------------------------------------------------------------
+/* --------------------------------------------------------------------------
+ *   trace level
+ * --------------------------------------------------------------------------*/
 void trace( const char *fmt, ...)
 {
   va_list va;
@@ -92,9 +116,9 @@ void trace( const char *fmt, ...)
   }
 }
 
-// --------------------------------------------------------------------------
-//   information level
-// --------------------------------------------------------------------------
+/* --------------------------------------------------------------------------
+ *   fatal level
+ * --------------------------------------------------------------------------*/
 void fatal( const char *fmt, ...)
 {
   va_list va;
@@ -105,9 +129,9 @@ void fatal( const char *fmt, ...)
   exit(1);
 }
 
-// --------------------------------------------------------------------------
-//   assert like log function
-// --------------------------------------------------------------------------
+/* --------------------------------------------------------------------------
+ *   assert like log function
+ * --------------------------------------------------------------------------*/
 void fatalif( int expr, const char *fmt, ...)
 {
   if ( expr ) {
@@ -120,9 +144,9 @@ void fatalif( int expr, const char *fmt, ...)
   }
 }
 
-// --------------------------------------------------------------------------
-//   assert like log function
-// --------------------------------------------------------------------------
+/* --------------------------------------------------------------------------
+ *   assert like log function
+ * --------------------------------------------------------------------------*/
 void errorif( int expr, const char *fmt, ...)
 {
   if ( expr ) {
@@ -134,9 +158,9 @@ void errorif( int expr, const char *fmt, ...)
   }
 }
 
-// --------------------------------------------------------------------------
-//   information level
-// --------------------------------------------------------------------------
+/* --------------------------------------------------------------------------
+ *   error level
+ * --------------------------------------------------------------------------*/
 void error( const char *fmt, ...)
 {
   va_list va;
@@ -146,9 +170,9 @@ void error( const char *fmt, ...)
   va_end(va);
 }
 
-// --------------------------------------------------------------------------
-//   information level
-// --------------------------------------------------------------------------
+/* --------------------------------------------------------------------------
+ *   warning level
+ * --------------------------------------------------------------------------*/
 void warn( const char *fmt, ...)
 {
   va_list va;
@@ -158,9 +182,9 @@ void warn( const char *fmt, ...)
   va_end(va);
 }
 
-// --------------------------------------------------------------------------
-//   Sets the log level
-// --------------------------------------------------------------------------
+/* --------------------------------------------------------------------------
+ *   Sets the log level
+ * --------------------------------------------------------------------------*/
 void set_log_level( uint8_t level)
 {
   if ( level >= LOG_INFO && level <= LOG_TRACE ) {

@@ -1,3 +1,27 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2020 vzvca
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 #include <sys/time.h>
 #include <signal.h>
 #include <setjmp.h>
@@ -10,14 +34,16 @@
 
 
 
-// forward
+/* forward */
 static int schedBoot( fiber_t *fiber );
 static void schedDispatch(scheduler_t *sched);
 
 
-// hashing pointer value
-// source: internet - to be check on 64-bit and 32-bit platform
-// I don't know if it has many collisions
+/* ----------------------------------------------------------------------------
+ * hashing pointer value
+ * source: internet - to be check on 64-bit and 32-bit platform
+ * I don't know if it has many collisions
+ * ----------------------------------------------------------------------------*/
 static uint32_t fiberHash(fiber_t *fiber)
 {
   uintptr_t ad = (uintptr_t) fiber;
@@ -723,6 +749,9 @@ int fiber_set_stack_size( fiber_t *fiber, uint32_t stacksz )
   if ( fiber->state != FIBER_EGG ) {
     return FIBER_ILLEGAL_STATE;
   }
+  if ( stacksz < 2048 || stacksz >= 1024*1024*1024 ) {
+    return FIBER_INVALID_STACK_SIZE;
+  }
   fiber->stacksz = stacksz;
   return FIBER_OK;
 }
@@ -786,6 +815,7 @@ int fiber_stop( fiber_t *fiber )
   // can't stop a fiber that is already in TERM or DONE state
   if ( fiber->state < FIBER_TERM && fiber->state > FIBER_INIT ) {
     fiber->state = FIBER_TERM;
+    // @bug: remove predicate
     return FIBER_OK;
   }
   else {
