@@ -52,7 +52,20 @@ typedef void (*pf_pre_hook_t)(scheduler_t *sched, void *extra);
 typedef void (*pf_post_hook_t)(scheduler_t *sched, void *extra);
 
 
-/* This enumeration defines the states of a fiber */
+/* ---------------------------------------------------------------------------
+ *  This enumeration defines the states of a fiber.
+ *
+ *  Newly malloced fibers are in FIBER_EGG state
+ *  Once attached to a scheduler they move to FIBER_INIT. Their stack
+ *  is allocated when in FIBER_INIT state.
+ *
+ *  As long as they are attached to their scheduler, their state is between
+ *  FIBER_INIT and FIBER_DONE.
+ *
+ *  When their state becomes FIBER_DEAD, their stack is deallocated and they
+ *  are not attached to their scheduler any more and can be freed.
+ * ---------------------------------------------------------------------------
+ */
 enum fiber_state_e 
   {
    FIBER_EGG,                /* Just malloced ! Still in its egg */
@@ -61,8 +74,9 @@ enum fiber_state_e
    FIBER_RUNNING,            /* ready to run, not waiting for anything */
    FIBER_TERM,               /* Fiber state when asked to terminate */
    FIBER_DONE,               /* Last state of a fiber just before disappearing */
+   FIBER_DEAD,               /* Fiber has been unlinked from its scheduler */
    FIBER_NUM_STATES
-};
+  };
 
 
 /* fiber data structure */
