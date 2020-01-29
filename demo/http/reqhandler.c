@@ -27,27 +27,74 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+/* data associated to a fiber */
+typedef struct extra_s {
+  int fd;
+  int pause;
+} extra_t;
 
 static char *boundary = "--boundarydonotcross";
 
-static card_t *allcards =
-  {
-   /* spades */
-   card_2s, card_3s, card_4s, card_5s, card_6s, card_7s, card_8s, card_9s,
-   card_ts, card_js, card_qs, card_ks, card_as,
-   /* hearts */
-   card_2h, card_3h, card_4h, card_5h, card_6h, card_7h, card_8h, card_9h,
-   card_th, card_jh, card_qh, card_kh, card_ah,
-   /* diamonds */
-   card_2d, card_3d, card_4d, card_5d, card_6d, card_7d, card_8d, card_9d,
-   card_td, card_jd, card_qd, card_kd, card_ad,
-   /* clubs */
-   card_2c, card_3c, card_4c, card_5c, card_6c, card_7c, card_8c, card_9c,
-   card_tc, card_jc, card_qc, card_kc, card_ac,
-  };
+/* defined in main.c */
+extern card_t *allcards[];
 
-static void safewrite( int fd, char *data, int sz )
+static int get_fiber_fd( fiber_t *f )
 {
+  extra_t *data = (extra_t*) fiber_get_extra(f);
+  return data->fd;
+}
+
+static int get_fiber_pause( fiber_t *f )
+{
+  extra_t *data = (extra_t*) fiber_get_extra(f);
+  return data->pause;
+}
+
+/* Write, checking for errors. */
+static void safewrite(int fd, const char *b, size_t n)
+{
+  size_t w = 0;
+  while (w < n){
+    ssize_t s = write(fd, b + w, n - w);
+    if (s < 0 && errno != EINTR)
+      return;
+    else if (s < 0)
+      s = 0;
+    w += (size_t)s;
+  }
+}
+
+void writeln( int fd, char *fmt, ... )
+{
+  va_list va;
+  char buffer[512];
+  va_start(va, fmt);
+  vsnprintf( buffer, sizeof(buffer), fmt, va);
+  buffer[sizeof(buffer)-1] = '\0';
+  va_end(va);
+  safewrite( fd, buffer, strlen(buffer));
+  safewrite( fd, "\n", 1);
+}
+
+static void send_respose( int fd, int code )
+{
+  switch( code ) {
+  case 200:
+    writeln( fd, "HTTP/1.1 200 OK");
+    break;
+  default:
+    writeln( fd, "HTTP/1.1 404 NOT FOUND");
+    break;
+  }
+}
+
+static char *date()
+{
+  return "Mon, 1 Jan 2030 12:34:56 GMT";
 }
 
 static void request_headers( int fd )
@@ -55,9 +102,9 @@ static void request_headers( int fd )
   writeln( fd, "Cache-Control: no-store, no-cache, must-revalidate, pre-check=0, post-check=0, max-age=0");
   writeln( fd, "Connection: close");
   writeln( fd, "Content-Type: multipart/x-mixed-replace;boundary=%s", boundary);
-  writeln( fd, "Expires: Mon, 1 Jan 2030 12:34:56 GMT");
+  writeln( fd, "Expires: %s", date());
   writeln( fd, "Pragma': no-cache");
-  writeln( fd );
+  writeln( fd, "" );
 }
 
 static void image_headers( int fd, card_t *card )
@@ -66,13 +113,13 @@ static void image_headers( int fd, card_t *card )
   writeln( fd, "Content-Length: %d", card->sz );
   /* mime-type must be set according file content*/
   writeln( fd, "Content-Type: image/gif");
-  writeln( fd );
+  writeln( fd, "" );
 } 
 
-void image_task( fiber_t *fiber )
+void image_run( fiber_t *fiber )
 {
   card_t *card;
-  int pause, fd = get;
+  int pause, fd = get_fiber_fd(fiber);
 
   /* reply OK */
   send_response( fd, 200);
@@ -83,9 +130,10 @@ void image_task( fiber_t *fiber )
   while(1) {
     /* boundary */
     writeln( fd, boundary );
-    writeln( fd );
+    writeln( fd, "" );
     
     /* choose a random card */
+    card = allcards(rand() % 52);
     
     /* dump headers */
     image_header( fd, card );
@@ -94,30 +142,92 @@ void image_task( fiber_t *fiber )
     safewrite( fd, card->bin, card->sz );
 
     /* wait a while */
-    fiber_wait( pause );
+    fiber_wait( get_fiber_pause(fiber) );
   }
 }
 
 void error404_run( fiber_t *fiber )
 {
-  int fd = get_fd(fiber);
+  int fd = get_fiber_fd(fiber);
   
   /* reply 404 and close connection */
   send_response( fd, 404);
-  close(fd);
 }
 
 void home_run( fiber_t *fiber )
 {
-  int fd = get_fd(fiber);
+  int fd = get_fiber_fd(fiber);
   
   /* reply 200, send home page and close connection */
   send_response( fd, 404);
+}
 
+/* --------------------------------------------------------------------------
+ *  On accept a fiber is created which uses this function
+ *  Depending on the web page requested, another function will be called
+ *  to handle the request.
+ * --------------------------------------------------------------------------*/
+void generic_run( fiber_t *fiber )
+{
+  char *location;
 
-  
+  if ( strcmp(location, "/") == 0 ) {
+    home_run( fiber );
+  }
+  else if ( isdigit(location[0]) ) {
+  }
+  else {
+    error404_run( fiber );
+  }
+}
+
+void done( fiber_t *fiber )
+{
+  int fd = get_fiber_fd(fiber);
   close(fd);
 }
+
+
+int seloop(void) {
+  fd_set rfds;
+  struct timeval tv;
+  int retval;
+
+  /* Watch stdin (fd 0) to see when it has input. */
+  FD_ZERO(&rfds);
+  FD_SET(0, &rfds);
+
+  /* Wait up to five seconds. */
+  tv.tv_sec = 5;
+  tv.tv_usec = 0;
+
+  retval = select(1, &rfds, NULL, NULL, &tv);
+  /* Don't rely on the value of tv now! */
+
+  if (retval == -1)
+    perror("select()");
+  else if (retval)
+    printf("Data is available now.\n");
+  /* FD_ISSET(0, &rfds) will be true. */
+  else
+    printf("No data within five seconds.\n");
+}
+
+void mktask( schedulter_t *sched, int fd )
+{
+  extra_t *pextra;
+  fiber_t *fiber;
+
+  extra = (extra_t*) malloc(sizeof(extra_t));
+  extra->fd = fd;
+  extra->pause = 200 + (rand() % 800); /* pause between 200ms to 1s */
+  fiber = fiber_new( generic_run, extra);
+  fiber_set_stack_size( fiber, 1024);
+  fiber_set_done_func( fiber, done);
+  fiber_start( sched, fiber);
+}
+
+
 
 
   
