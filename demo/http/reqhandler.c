@@ -45,6 +45,7 @@ static char *boundary = "--boundarydonotcross";
 static fd_set cnxset;
 static int  cnxmaxfd = 0;
 
+#define BACKLOG 5
 #define CNXMAX 64
 static fiber_t *cnx2fiber[CNXMAX];
 
@@ -223,7 +224,7 @@ void home( fiber_t *fiber )
  *  Depending on the web page requested, another function will be called
  *  to handle the request.
  * --------------------------------------------------------------------------*/
-void generic_run( fiber_t *fiber )
+void generic_task( fiber_t *fiber )
 {
   extra_t *extra = (extra_t*) fiber_get_extra( fiber );
   int n, fd = get_fiber_fd( fiber );
@@ -357,7 +358,7 @@ void mktask( scheduler_t *sched, int fd )
     cnxmaxfd = fd;
   }
   
-  fiber = fiber_new( generic_run, extra);
+  fiber = fiber_new( generic_task, extra);
   fiber_set_stack_size( fiber, 8192);
   fiber_set_done_func( fiber, done);
   fiber_start( sched, fiber);
@@ -396,20 +397,56 @@ void accept_task( fiber_t *fiber )
  *  Opens the server socket, create the scheduler and the initial task
  *  that will handle
  * --------------------------------------------------------------------------*/
-void server()
+void server( short portno )
 {
+  struct sockaddr_in server_addr;
+  int serverfd;
   scheduler_t *sched;
   fiber_t *fiber;
 
   /* create listening socket */
+  serverfd = socket(AF_INET, SOCK_STREAM, 0);
+  if ( serverfd < 0 ) {
+    perror("ERROR opening server socket");
+    exit(1);
+  }
+
+  /* bind it */
+  bzero( (char*) &server_addr, sizeof(server_addr));
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_addr.s_addr = INADDR_ANY;
+  server_addr.sin_port = htons(portno);
+ 
+  if ( bind(serverfd, (struct sockaddr*) &server_addr, sizeof(server_addr)) < 0 ) {
+    perror("ERROR on binding");
+    exit(1);
+  }
+   
+  /* start listening */
+  if ( listen(serverfd, BACKLOG) < 0 ) {
+    perror("ERROR on listen");
+    exit(1);
+  }
+ 
+  /* add server socket to watched fd set */
+  cnxmaxfd = serverfd;
+  FD_SET( serverfd, &cnxset );
 
   /* create scheduler */
   sched = scheduler_new();
 
   /* create the fiber that will accept
    * incoming connections */
-  fiber = fiber_new( accept_task);
-  fiber_set_stack_size( fiber, 4096);
+  extra = (extra_t*) malloc(sizeof(extra_t));
+  if ( extra == NULL ) {
+    exit(1);
+  }
+  extra->fd = serverfd;
+  extra->pause = 0;
+  extra->hasdata = 0;
+
+  fiber = fiber_new( accept_task, extra );
+  fiber_set_stack_size( fiber, 8192);
   fiber_start( sched, fiber );
 
   while(1) {
@@ -417,3 +454,4 @@ void server()
     scheduler_cycle( sched );
   }
 }
+
