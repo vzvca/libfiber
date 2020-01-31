@@ -1,10 +1,15 @@
+#include <stdio.h>
+
 #include "task.h"
 
-int count = 0;
+volatile int count = 0;
 
 void run( fiber_t *fiber)
 {
-  count ++;
+  while(1) {
+    count ++;
+    fiber_yield(fiber);
+  }
 }
 
 int main()
@@ -14,6 +19,9 @@ int main()
   uint32_t t;
   int i;
 
+  /* create scheduler */
+  sched = scheduler_new();
+  
   /* create 100 fiber */
   for( i = 0; i < 100; ++i ) {
     fiber = fiber_new( run, NULL);
@@ -23,15 +31,14 @@ int main()
 
   /* do many cycles and measure time */
   sched_elapsed();
-  for (i = 0; i < 100000; ++i) {
-    sched_cycle( sched );
+  for (i = 0; i < 500000; ++i) {
+    sched_cycle( sched, 0 );
   }
   t = sched_elapsed();
 
   /* dump stats */
-  printf("Number of iteration : %d\n", i);
-  printf("Duration            : %d\n", t);
-  printf("Iteration / second  : %d\n", (i/1000)*t);
+  printf("Number of context switch : %d\n", count);
+  printf("Context switch / second  : %d\n", 1000*(count/t));
 
   return 0;
 }
