@@ -188,8 +188,8 @@ static int schedRemoveFiber(scheduler_t *sched, fiber_t *fiber)
     return FIBER_NO_SUCH_FIBER;
   }
 
-  if (fiber->scheduler->fibers[fiber->fid] == fiber) {
-    fiber->scheduler->fibers[fiber->fid] = NULL;
+  if (sched->fibers[fiber->fid] == fiber) {
+    sched->fibers[fiber->fid] = NULL;
     --sched->nfibers;
     return FIBER_OK;
   }
@@ -673,16 +673,16 @@ int fiber_wait_for_var( fiber_t *fiber, uint32_t msec, int *addr, int value)
   vcd.addr = addr;
   vcd.value = value;
   
-  // link fiber to predicate
+  /* link fiber to predicate */
   fiber->predicate = &pred;
 
-  // change fiber state
+  /* change fiber state */
   fiber->state = FIBER_SUSPEND;
 
-  // yield
+  /* yield */
   fiberYield( fiber );
 
-  // execution resume here
+  /* execution resume here */
   if ( pred.state == PREDICATE_FIRED ) {
     return FIBER_TIMEOUT;
   }
@@ -696,15 +696,15 @@ fiber_t *fiber_new(pf_run_t run_func, void *extra)
 {
   fiber_t *res;
 
-  // check if there are some fibers available
+  /* check if there are some fibers available */
   
-  // allocate
+  /* allocate */
   res = (fiber_t*) malloc(sizeof(*res));
   if ( res == NULL ) {
     return NULL;
   }
 
-  // init data structure
+  /* init data structure */
   memset( res, 0, sizeof(*res));
   res->extra = extra;
   res->pf_run = run_func;
@@ -749,6 +749,14 @@ int fiber_set_done_func( fiber_t *fiber, pf_done_t done_func)
   return FIBER_OK;
 }
 
+scheduler_t *fiber_get_scheduler(fiber_t *fiber)
+{
+  if ( fiber == NULL ) {
+    return NULL;
+  }
+  return fiber->scheduler;
+}
+
 void *fiber_get_extra(fiber_t *fiber)
 {
   if ( fiber == NULL ) {
@@ -766,8 +774,10 @@ int fiber_set_extra(fiber_t *fiber, void *extra)
   return FIBER_OK;
 }
 
-// must be called before starting the fiber
-// if not called a defult stack size of 64k is used
+/* 
+ * must be called before starting the fiber
+ * if not called a defult stack size of 64k is used
+ */
 int fiber_set_stack_size( fiber_t *fiber, uint32_t stacksz )
 {
   if ( fiber == NULL ) {
@@ -783,7 +793,9 @@ int fiber_set_stack_size( fiber_t *fiber, uint32_t stacksz )
   return FIBER_OK;
 }
 
-// starts a newly created fiber
+/*
+ * starts a newly created fiber
+ */
 int fiber_start( scheduler_t *sched, fiber_t *fiber )
 {
   uint32_t h;
@@ -798,7 +810,7 @@ int fiber_start( scheduler_t *sched, fiber_t *fiber )
     return FIBER_TOO_MANY_FIBERS;
   }
   
-  // allocate stack for fiber
+  /* allocate stack for fiber */
   if ( fiber->stacksz == 0 ) {
     fiber->stacksz = DEFAULTSTACKSIZE;
   }
@@ -807,13 +819,13 @@ int fiber_start( scheduler_t *sched, fiber_t *fiber )
     return FIBER_MEMORY_ALLOCATION_ERROR;
   }
 
-  // link fiber and scheduler
+  /* link fiber and scheduler */
   fiber->scheduler = sched;
 
-  // move fiber to init state
+  /* move fiber to init state */
   fiber->state = FIBER_INIT;
   
-  // insert in hash table
+  /* insert in hash table */
   h = fiberHash( fiber ) % ARRAYSIZE;
   while( sched->fibers[h] != NULL ) {
     h = (h+1) % ARRAYSIZE;
@@ -821,28 +833,30 @@ int fiber_start( scheduler_t *sched, fiber_t *fiber )
   fiber->fid = h;
   sched->fibers[h] = fiber;
 
-  // insert in init list
+  /* insert in init list */
   fiber->next = sched->lists[FIBER_INIT];
   sched->lists[FIBER_INIT] = fiber;
 
-  // increase fiber count
+  /* increase fiber count */
   ++sched->nfibers;
   
-  // all good
+  /* all good */
   return FIBER_OK;
 }
 
-// explicit stop of a fiber
+/*
+ * explicit stop of a fiber
+ */
 int fiber_stop( fiber_t *fiber )
 {
   if ( fiberCheckExist(fiber) != FIBER_OK ) {
     return FIBER_NO_SUCH_FIBER;
   }
-  // can't stop a fiber that hasn't been started yet
-  // can't stop a fiber that is already in TERM or DONE state
+  /* can't stop a fiber that hasn't been started yet
+   * can't stop a fiber that is already in TERM or DONE state
+   */
   if ( fiber->state < FIBER_TERM && fiber->state > FIBER_INIT ) {
     fiber->state = FIBER_TERM;
-    // @bug: remove predicate
     return FIBER_OK;
   }
   else {

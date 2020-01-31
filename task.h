@@ -303,6 +303,17 @@ int fiber_set_done_func( fiber_t *fiber, pf_done_t done_func);
 
 /*
  * --------------------------------------------------------------------------
+ * fiber_get_scheduler --
+ *
+ * Returns the `scheduler' associated with a fiber.
+ *
+ * Returns NULL if `fiber' is NULL.
+ * ---------------------------------------------------------------------------
+ */
+scheduler_t *fiber_get_scheduler(fiber_t *fiber);
+
+/*
+ * --------------------------------------------------------------------------
  * fiber_get_extra --
  *
  * Returns the `extra' data associated with a fiber. The `extra' data can

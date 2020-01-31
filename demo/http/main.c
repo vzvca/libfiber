@@ -60,11 +60,19 @@ card_t *allcards[] =
 
 static int init()
 {
+      char buffer[64];
   int i;
   for ( i = 0; i < 52; ++i ) {
     card_t *pcard = allcards[i];
     pcard->bin = malloc(strlen(pcard->b64));
     pcard->sz = b64decode( pcard->b64, pcard->bin );
+    {
+      FILE *fout;
+      sprintf(buffer, "%d.gif", i);
+      fout = fopen( buffer, "wb");
+      fwrite( pcard->bin, pcard->sz, 1, fout);
+      fclose(fout);
+    }
   }
 }
 
