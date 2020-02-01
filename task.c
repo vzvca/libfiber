@@ -30,7 +30,7 @@
 
 #include <stdio.h>
 
-#include "task.h"
+#include "taskint.h"
 
 
 
@@ -120,8 +120,7 @@ static void schedProcessPredicates(scheduler_t *sched)
   fiber_t *pf;
 
   /* current elapsed time in msec */
-  // @todo fix
-  now = sched_elapsed();
+  now = sched_timestamp();
   
   for( pf = sched->lists[FIBER_SUSPEND]; pf != NULL; pf = pf->next) {
     if ( pf->state != FIBER_SUSPEND ) {
@@ -191,6 +190,8 @@ static int schedRemoveFiber(scheduler_t *sched, fiber_t *fiber)
   if (sched->fibers[fiber->fid] == fiber) {
     sched->fibers[fiber->fid] = NULL;
     --sched->nfibers;
+    free( fiber->stack );
+    fiber->stack = NULL;
     return FIBER_OK;
   }
 
@@ -199,13 +200,45 @@ static int schedRemoveFiber(scheduler_t *sched, fiber_t *fiber)
 }
 
 /*
- * scheduler cycle
+ * ----------------------------------------------------------------------------
+ *  sched_cycle --
+ *
+ *  Runs a scheduler cycle. The scheduler will process all the fibers that
+ *  were added to it. Its processes the fibers according to their state :
+ *
+ *   - First fibers in FIBER_INIT state : they will be started and their state
+ *     becomes FIBER_RUNNING. They will run later in the same cycle.
+ *     A stack is allocated during this stage.
+ *
+ *   - Then fibers in FIBER_SUSPEND state : it will check if they need to be
+ *     restarted, if so their state is changed to FIBER_RUNNING and they
+ *     will be run later in the same cycle.
+ *
+ *   - Then fibers in FIBER_RUNNING state : they run which can trigger a change
+ *     in their current state : it will change to FIBER_SUSPEND or
+ *     FIBER_DONE. They can change the state of another fiber, calling
+ *     fiber_term().
+ *
+ *   - Then fibers in FIBER_TERM state. Their state is changed to FIBER_DONE.
+ *
+ *   - Then fibers in FIBER_DONE state. These fibers are removed from the
+ *     scheduler and their stack is deallocated.
+ *  
+ *  The 'timestamp' argument is a logical time that will keep this value 
+ *  during the whole cycle. Usually this timestamp is the return value
+ *  of sched_elapsed() which gives the number of milliseconds elapsed
+ *  since the first call to sched_elapsed(). But any monotonic increasing
+ *  value can be used like a counter or a microsecond resolution clock.
+ * ----------------------------------------------------------------------------
  */
-void sched_cycle(scheduler_t *sched, uint32_t elapsed)
+void sched_cycle(scheduler_t *sched, uint32_t timestamp )
 {
   fiber_t *pf, *opf;
 
-  debug("scheduler %p cycle %d\n", sched, elapsed);
+  debug("scheduler %p cycle %d\n", sched, timestamp);
+
+  /* register timestamp */
+  sched->timestamp = timestamp;
   
   /* invoke hook */
   if ( sched->pf_pre_hook ) {
@@ -280,14 +313,14 @@ void sched_cycle(scheduler_t *sched, uint32_t elapsed)
       error("Fiber %d not in FIBER_DONE state!\n", pf->fid);
       continue;
     }
+
+    /* Remove from scheduler and free stack */
+    schedRemoveFiber( sched, pf);
     
     /* Call done function pointer if supplied */
     if ( pf->pf_done ) {
       pf->pf_done(pf);
     }
-
-    /* Destroy fiber */
-    schedRemoveFiber( sched, pf);
   }
   sched->lists[FIBER_DONE] = NULL;
   
@@ -341,42 +374,52 @@ static void schedDispatch(scheduler_t *sched)
   sched->running = NULL;
 }
 
-// contains the currently booting fiber
-// marked as volatile to prevent access optimization by the compiler
+/* contains the currently booting fiber */
+/* marked as volatile to prevent access optimization by the compiler */
 static volatile fiber_t *bootingFiber = NULL;
 
-// code that run a fiber
+/*
+ * ----------------------------------------------------------------------------
+ *  Start a fiber
+ *  This function executes on the fiber stack
+ * ----------------------------------------------------------------------------
+ */
 static void fiberStart(int ignored)
 {
-  // ugly but needed ... retreive fiber from global
+  /* ugly but needed ... retreive fiber from global */
   fiber_t *fiber = (fiber_t *) bootingFiber;
   
   debug("starting fiber %p (fid = %d).\n", fiber, fiber->fid);
     
-  // we are running on fiber stack
-  // the stack was set up before by fiberBoot
+  /* we are running on fiber stack
+   * the stack was set up before by fiberBoot */
   if ( !setjmp(fiber->context) ) {
-    // return to boot code
+    /* return to boot code on the scheduler stack */
     return;
   }
   else {
-    // we re-enter here
-    // the point is that the stack is still there even if the SIGUSR1
-    // signal handler has already returned
+    /* we re-enter here
+     * the point is that the stack is still there even if the SIGUSR1
+     * signal handler has already returned */
     debug("Reentering...\n");
   }
 
-  // start running
+  /* start running */
   fiber->pf_run(fiber);
 
-  // fiber function returned
-  // jump back to scheduler
+  /* fiber function returned
+   * jump back to scheduler */
   debug("Fiber %d now in state FIBER_DONE.\n", fiber->fid);
   fiber->state = FIBER_DONE;
   longjmp(fiber->scheduler->context, FIBER_DONE);
 }
 
-// code to boot a fiber
+/*
+ * ----------------------------------------------------------------------------
+ *  Code to boot a fiber 
+ *  It executes on the scheduler stack.
+ * ----------------------------------------------------------------------------
+ */
 static int schedBoot( fiber_t *fiber )
 {
   struct sigaction handler;
@@ -488,7 +531,7 @@ int fiber_wait(fiber_t *fiber, uint32_t msec)
    * and will be called back in next step */
   if ( msec > 0 ) {
     /* fill predicate */
-    pred.deadline = sched_elapsed() + msec;
+    pred.deadline = sched_timestamp() + msec;
     pred.fiber = fiber;
     pred.state = PREDICATE_ACTIVE;
 
@@ -533,7 +576,7 @@ int fiber_wait_for_cond( fiber_t *fiber, uint32_t msec, pf_check_t pfun, void *p
   pred.fiber = fiber;
   pred.state = PREDICATE_ACTIVE;
   if ( msec > 0 ) {
-    pred.deadline = sched_elapsed() + msec;
+    pred.deadline = sched_timestamp() + msec;
   }
   else {
     pred.deadline = 0;
@@ -600,7 +643,7 @@ int fiber_join( fiber_t *fiber, uint32_t msec, fiber_t *other)
   pred.fiber = fiber;
   pred.state = PREDICATE_ACTIVE;
   if ( msec > 0 ) {
-    pred.deadline = sched_elapsed() + msec;
+    pred.deadline = sched_timestamp() + msec;
   }
   else {
     pred.deadline = 0;
@@ -640,7 +683,6 @@ static int fiber_var_check( fiber_t *fiber, void *data )
 
 /* 
  * fonction to wait for a given predicate
- * part of public API
  */
 int fiber_wait_for_var( fiber_t *fiber, uint32_t msec, int *addr, int value)
 {
@@ -661,7 +703,7 @@ int fiber_wait_for_var( fiber_t *fiber, uint32_t msec, int *addr, int value)
   pred.fiber = fiber;
   pred.state = PREDICATE_ACTIVE;
   if ( msec > 0 ) {
-    pred.deadline = sched_elapsed() + msec;
+    pred.deadline = sched_timestamp() + msec;
   }
   else {
     pred.deadline = 0;
@@ -691,7 +733,14 @@ int fiber_wait_for_var( fiber_t *fiber, uint32_t msec, int *addr, int value)
 }
 
 
-// --------------------------------------------------------------------------
+/*
+ * ---------------------------------------------------------------------------
+ *  fiber_new --
+ *  
+ *  Allocates a fiber object with malloc and initializes it.
+ *  It sets its state to FIBER_EGG.
+ * ---------------------------------------------------------------------------
+ */
 fiber_t *fiber_new(pf_run_t run_func, void *extra)
 {
   fiber_t *res;
@@ -713,6 +762,11 @@ fiber_t *fiber_new(pf_run_t run_func, void *extra)
   return res;
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ *  fiber_set_init_func --
+ * ---------------------------------------------------------------------------
+ */
 int fiber_set_init_func( fiber_t *fiber, pf_init_t init_func)
 {
   if ( fiber == NULL ) {
@@ -725,6 +779,11 @@ int fiber_set_init_func( fiber_t *fiber, pf_init_t init_func)
   return FIBER_OK;
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ *  fiber_set_term_func --
+ * ---------------------------------------------------------------------------
+ */
 int fiber_set_term_func( fiber_t *fiber, pf_term_t term_func)
 {
   if ( fiber == NULL ) {
@@ -737,6 +796,11 @@ int fiber_set_term_func( fiber_t *fiber, pf_term_t term_func)
   return FIBER_OK;
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ *  fiber_set_done_func --
+ * ---------------------------------------------------------------------------
+ */
 int fiber_set_done_func( fiber_t *fiber, pf_done_t done_func)
 {
   if ( fiber == NULL ) {
@@ -749,6 +813,11 @@ int fiber_set_done_func( fiber_t *fiber, pf_done_t done_func)
   return FIBER_OK;
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ *  fiber_set_int_func --
+ * ---------------------------------------------------------------------------
+ */
 scheduler_t *fiber_get_scheduler(fiber_t *fiber)
 {
   if ( fiber == NULL ) {
@@ -757,6 +826,14 @@ scheduler_t *fiber_get_scheduler(fiber_t *fiber)
   return fiber->scheduler;
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ *  fiber_get_extra --
+ *
+ *  Retreive the pointer of custom data attached to the fiber.
+ *  Returns NULL if no custom data were attached.
+ * ---------------------------------------------------------------------------
+ */
 void *fiber_get_extra(fiber_t *fiber)
 {
   if ( fiber == NULL ) {
@@ -765,6 +842,11 @@ void *fiber_get_extra(fiber_t *fiber)
   return fiber->extra;
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ *  fiber_set_int_func --
+ * ---------------------------------------------------------------------------
+ */
 int fiber_set_extra(fiber_t *fiber, void *extra)
 {
   if ( fiber == NULL ) {
@@ -775,8 +857,10 @@ int fiber_set_extra(fiber_t *fiber, void *extra)
 }
 
 /* 
+ * ---------------------------------------------------------------------------
  * must be called before starting the fiber
  * if not called a defult stack size of 64k is used
+ * ---------------------------------------------------------------------------
  */
 int fiber_set_stack_size( fiber_t *fiber, uint32_t stacksz )
 {
@@ -794,7 +878,9 @@ int fiber_set_stack_size( fiber_t *fiber, uint32_t stacksz )
 }
 
 /*
+ * ---------------------------------------------------------------------------
  * starts a newly created fiber
+ * ---------------------------------------------------------------------------
  */
 int fiber_start( scheduler_t *sched, fiber_t *fiber )
 {
@@ -845,7 +931,9 @@ int fiber_start( scheduler_t *sched, fiber_t *fiber )
 }
 
 /*
+ * ---------------------------------------------------------------------------
  * explicit stop of a fiber
+ * ---------------------------------------------------------------------------
  */
 int fiber_stop( fiber_t *fiber )
 {
@@ -942,3 +1030,35 @@ int sched_get_num_fibers( scheduler_t *sched)
   return sched->nfibers;
 }
 
+/* --------------------------------------------------------------------------
+ *  It returns 0 if there are fibers in FIBER_RUNNING, FIBER_INIT, FIBER_TERM
+ *  or FIBER_DONE state.
+ *
+ *  If no fibers are running it scans the list of fibers in FIBER_SUSPEND 
+ *  state. Some will have set up an alarm at a specific time in the future. 
+ *  This function returns the next pending deadline.
+ *
+ *  If all suspended fibers can wait indefinitly for an event of interest,
+ *  the function returns UINT_MAX.
+ * --------------------------------------------------------------------------*/
+uint32_t sched_deadline( scheduler_t *sched )
+{
+  uint32_t res = UINT_MAX;
+  fiber_t *fiber;
+  
+  if ( sched == NULL ) {
+    return res;
+  }
+  if ( sched->lists[FIBER_INIT] != NULL ) return 0;
+  if ( sched->lists[FIBER_RUNNING] != NULL ) return 0;
+  if ( sched->lists[FIBER_TERM] != NULL ) return 0;
+  if ( sched->lists[FIBER_DONE] != NULL ) return 0;
+
+  for( fiber = sched->lists[FIBER_SUSPEND]; fiber; fiber = fiber->next ) {
+    if ( fiber->predicate == NULL ) continue;
+    if ( fiber->predicate->state != PREDICATE_ACTIVE ) continue;
+    if ( fiber->predicate->deadline < res ) res = fiber->predicate->deadline;
+  }
+
+  return res;
+}

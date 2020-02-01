@@ -45,7 +45,7 @@ typedef struct extra_s {
   int hasdata;  /* tells if data is ready on socket */
 } extra_t;
 
-static char *boundary = "--boundarydonotcross";
+static char *boundary = "--myboundary";
 
 /* this set contains the current sockets to watch */
 static fd_set cnxset;
@@ -168,13 +168,16 @@ static void image_headers( int fd, card_t *card )
 } 
 
 /* --------------------------------------------------------------------------
- *  Send multipart image
+ *  Send mjpeg video
+ * --myboundary
+ * Content-Type: image/jpeg
+ * Content-Length: 42149
  * --------------------------------------------------------------------------*/
-void image( fiber_t *fiber )
+void video( fiber_t *fiber )
 {
-  card_t *card;
-  int pause, fd = get_fiber_fd(fiber);
-  //int flag = 1; 
+  int   n, fd = get_fiber_fd(fiber);
+  char  buffer[4096];
+  FILE *fin;
 
   /* reply OK */
   send_response( fd, 200);
@@ -182,8 +185,29 @@ void image( fiber_t *fiber )
   /* Response headers (multipart) */
   request_headers( fd );
 
-  /* force flush */
-  //setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
+  fin = fopen( "video.mjpeg", "rb" );
+  do {
+    n = fread( buffer, 1, sizeof(buffer), fin);
+    safewrite( fd, buffer, n );
+    fiber_yield( fiber);
+  } while(n == sizeof(buffer));
+  fclose(fin);
+}
+
+
+/* --------------------------------------------------------------------------
+ *  Send multipart image
+ * --------------------------------------------------------------------------*/
+void image( fiber_t *fiber )
+{
+  card_t *card;
+  int pause, fd = get_fiber_fd(fiber);
+
+  /* reply OK */
+  send_response( fd, 200);
+     
+  /* Response headers (multipart) */
+  request_headers( fd );
  
   while(1) {
     
@@ -201,7 +225,7 @@ void image( fiber_t *fiber )
     safewrite( fd, card->bin, card->sz );
 
     /* wait a while */
-    fiber_wait( fiber, get_fiber_pause(fiber) );
+    fiber_yield( fiber );
   }
 }
 
@@ -226,7 +250,7 @@ void error404( fiber_t *fiber )
 void home( fiber_t *fiber )
 {
   int fd = get_fiber_fd(fiber);
-  char *page = "<html><head></head><body><img src='zzz'></body></html>";
+  char *page = "<html><head></head><body><img width=640 height=480 src='video.mjpeg'></body></html>";
   
   send_response( fd, 200);
   
@@ -268,6 +292,10 @@ void generic_task( fiber_t *fiber )
       if ( strcmp(location, "/") == 0 ) {
 	puts("home");
 	home( fiber );
+      }
+      else if ( strncmp(location+1, "video.mjpeg", 11) == 0 ) {
+	puts("video");
+	video( fiber );
       }
       else if ( isdigit(location[1]) ) {
 	puts("image");
