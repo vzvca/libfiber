@@ -1,0 +1,29 @@
+<html>
+  <head>
+    <title>Home</title>
+  </head>
+  <body>
+    <p>
+      Click on the link, it will open a new tab in the browser.
+      Each link is a test page. All the requests will be served using fibers sharing the same kernel thread.
+    </p>
+    <table>
+      <tr>
+	<td><a href="traffic.mjpeg">cards</a></td>
+	<td><p>Displays 52 cards making many requests to have images.</p></td>
+      </tr>
+      <tr>
+	<td><a href="traffic.mjpeg">traffic video</a></td>
+	<td><p>Streams MJPEG video stream (New York traffic)</p></td>
+      </tr>
+      <tr>
+	<td><a href="bar.mjpeg">bar video</a></td>
+	<td><p>Streams MJPEG video stream (bar in Spain)</p></td>
+      </tr>
+      <tr>
+	<td><a href="music.mp3">music</a></td>
+	<td><p>Streams MP3 music</p></td>
+      </tr>
+    </table>
+  </body>
+</html>

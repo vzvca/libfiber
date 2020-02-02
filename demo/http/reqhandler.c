@@ -175,7 +175,7 @@ static void image_headers( int fd, card_t *card )
  * Content-Type: image/jpeg
  * Content-Length: 42149
  * --------------------------------------------------------------------------*/
-void video( fiber_t *fiber )
+void video( fiber_t *fiber, char *fname )
 {
   int   n, fd = get_fiber_fd(fiber);
   char  buffer[4096];
@@ -187,7 +187,7 @@ void video( fiber_t *fiber )
   /* Response headers (multipart) */
   request_headers( fd );
 
-  fin = fopen( "video.mjpeg", "rb" );
+  fin = fopen( fname, "rb" );
   do {
     n = fread( buffer, 1, sizeof(buffer), fin);
     safewrite( fd, buffer, n );
@@ -196,6 +196,42 @@ void video( fiber_t *fiber )
   fclose(fin);
 }
 
+void traffic( fiber_t *fiber )
+{
+  video( fiber, "www/traffic.mjpeg" );
+}
+
+void ovisobar( fiber_t *fiber )
+{
+  video( fiber, "www/oviso.mjpeg" );
+}
+
+void music( fiber_t *fiber, char *fname )
+{
+  int   n, fd = get_fiber_fd(fiber);
+  char  buffer[4096];
+  FILE *fin;
+
+  /* reply OK */
+  send_response( fd, 200);
+     
+  /* Response headers */
+  writeln( fd, "Content-Type: audio/mpeg");
+  writeln( fd, "" );
+
+  fin = fopen( fname, "rb" );
+  do {
+    n = fread( buffer, 1, sizeof(buffer), fin);
+    safewrite( fd, buffer, n );
+    fiber_yield( fiber);
+  } while(n == sizeof(buffer));
+  fclose(fin);
+}
+
+void meydan( fiber_t *fiber )
+{
+  music( fiber, "www/Meydn-SynthwaveVibe.mp3");
+}
 
 /* --------------------------------------------------------------------------
  *  Send multipart image
