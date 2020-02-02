@@ -27,7 +27,6 @@
 #include <setjmp.h>
 #include <malloc.h>
 #include <string.h>
-
 #include <stdio.h>
 
 #include "taskint.h"
@@ -120,7 +119,7 @@ static void schedProcessPredicates(scheduler_t *sched)
   fiber_t *pf;
 
   /* current elapsed time in msec */
-  now = sched_timestamp();
+  now = sched_timestamp( sched );
   
   for( pf = sched->lists[FIBER_SUSPEND]; pf != NULL; pf = pf->next) {
     if ( pf->state != FIBER_SUSPEND ) {
@@ -531,7 +530,7 @@ int fiber_wait(fiber_t *fiber, uint32_t msec)
    * and will be called back in next step */
   if ( msec > 0 ) {
     /* fill predicate */
-    pred.deadline = sched_timestamp() + msec;
+    pred.deadline = sched_timestamp( fiber->scheduler ) + msec;
     pred.fiber = fiber;
     pred.state = PREDICATE_ACTIVE;
 
@@ -576,7 +575,7 @@ int fiber_wait_for_cond( fiber_t *fiber, uint32_t msec, pf_check_t pfun, void *p
   pred.fiber = fiber;
   pred.state = PREDICATE_ACTIVE;
   if ( msec > 0 ) {
-    pred.deadline = sched_timestamp() + msec;
+    pred.deadline = sched_timestamp( fiber->scheduler ) + msec;
   }
   else {
     pred.deadline = 0;
@@ -643,7 +642,7 @@ int fiber_join( fiber_t *fiber, uint32_t msec, fiber_t *other)
   pred.fiber = fiber;
   pred.state = PREDICATE_ACTIVE;
   if ( msec > 0 ) {
-    pred.deadline = sched_timestamp() + msec;
+    pred.deadline = sched_timestamp( fiber->scheduler ) + msec;
   }
   else {
     pred.deadline = 0;
@@ -703,7 +702,7 @@ int fiber_wait_for_var( fiber_t *fiber, uint32_t msec, int *addr, int value)
   pred.fiber = fiber;
   pred.state = PREDICATE_ACTIVE;
   if ( msec > 0 ) {
-    pred.deadline = sched_timestamp() + msec;
+    pred.deadline = sched_timestamp( fiber->scheduler ) + msec;
   }
   else {
     pred.deadline = 0;
@@ -975,7 +974,7 @@ int fiber_free( fiber_t *fiber )
 /* ---------------------------------------------------------------------------
  * create a new scheduler
  * ---------------------------------------------------------------------------*/
-scheduler_t *scheduler_new()
+scheduler_t *sched_new()
 {
   scheduler_t *res;
   res = (scheduler_t*) malloc(sizeof(scheduler_t));
@@ -989,7 +988,7 @@ scheduler_t *scheduler_new()
 /* ---------------------------------------------------------------------------
  * free scheduler
  * ---------------------------------------------------------------------------*/
-int scheduler_free( scheduler_t *sched )
+int sched_free( scheduler_t *sched )
 {
   free( sched );
   return FIBER_OK;
@@ -998,7 +997,7 @@ int scheduler_free( scheduler_t *sched )
 /* ---------------------------------------------------------------------------
  * start running a scheduler at the given frequency
  * ---------------------------------------------------------------------------*/
-void scheduler_run( uint32_t period )
+void sched_run( uint32_t period )
 {
   // @todo: implement me !
 }
@@ -1025,7 +1024,7 @@ uint32_t sched_elapsed()
 /* --------------------------------------------------------------------------
  *   Returns number of fibers in scheduler
  * --------------------------------------------------------------------------*/
-int sched_get_num_fibers( scheduler_t *sched)
+int sched_numfibers( scheduler_t *sched)
 {
   return sched->nfibers;
 }
@@ -1061,4 +1060,13 @@ uint32_t sched_deadline( scheduler_t *sched )
   }
 
   return res;
+}
+
+/* --------------------------------------------------------------------------
+ *  sched_timestamp --
+ * --------------------------------------------------------------------------*/
+uint32_t sched_timestamp( scheduler_t *sched )
+{
+  if ( sched == NULL ) return 0;
+  return sched->timestamp;
 }

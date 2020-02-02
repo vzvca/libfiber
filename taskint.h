@@ -95,7 +95,7 @@ struct scheduler
   fiber_t *running;                 /* Currently running fiber. */
   int nfibers;                      /* Total number of fibers */
 
-  uint32_t time;                    /* scheduler notion of time */
+  uint32_t timestamp;               /* scheduler notion of time */
   
   /* definition of 2 functions pointers that will be invoked 
    * before and after each scheduler cycle.

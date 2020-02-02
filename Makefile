@@ -1,15 +1,17 @@
 CC=gcc
 CFLAGS=-g3 -Wall
 
+OBJS=logger.o task.o
 
-OBJS=logger.o task.o main.o
-
-coro:$(OBJS)
-	$(CC) -o $@ $(OBJS)
+libfiber.a: $(OBJS)
+	$(AR) -c $@ $(OBJS)
 	@echo "done!"
 
 clean:
 	-rm -f $(OBJS)
-	-rm -f coro coro.exe
+	-rm -f libfiber.a
 
-task.c main.c: task.h
+task.c: taskint.h task.h logger.h
+
+logger.c: logger.h
+

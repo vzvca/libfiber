@@ -25,7 +25,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "task.h"
+#include "taskint.h"
 
 void pre_hook_func(scheduler_t *sched, void *extra)
 {
@@ -188,20 +188,20 @@ void run_spawn_join_wait_var( fiber_t *fiber )
  * --------------------------------------------------------------------------*/
 START_TEST (test_no_fiber)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   int n;
 
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   
   /* run the scheduler 1000 times */
   for( n = 0; n < 1000; ++n ) {
     sched_cycle( sched, sched_elapsed());
   }
 
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
 
   /* clean */
-  scheduler_free( sched );
+  sched_free( sched );
 }
 END_TEST
 
@@ -211,15 +211,15 @@ END_TEST
  * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_forever)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1;
   int n;
   
   f1 = fiber_new(run_forever, NULL);
 
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
   
   /* run the scheduler 1000 times */
   for( n = 0; n < 1000; ++n ) {
@@ -227,10 +227,10 @@ START_TEST (test_single_fiber_forever)
   }
 
   /* test fiber still there */
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
   /* clean */
-  scheduler_free( sched );
+  sched_free( sched );
   fiber_free( f1 );
 }
 END_TEST
@@ -240,550 +240,565 @@ END_TEST
  * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_done)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1;
   int n;
   
   f1 = fiber_new(run_done, NULL);
 
   /* start the fiber */
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // run a cycle
+  /* run a cycle */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
 
-  // run the scheduler 1000 times
-  // and check the number of active fibers
+  /* run the scheduler 1000 times
+   * and check the number of active fibers */
   for( n = 0; n < 1000; ++n ) {
     sched_cycle( sched, sched_elapsed());
   }
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   scheduler with a single fiber that lasts 2 scheduling cycles
+/* --------------------------------------------------------------------------
+ *   scheduler with a single fiber that lasts 2 scheduling cycles
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_2iter)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1;
   int n;
   
   f1 = fiber_new(run_2iter, NULL);
 
-  // start the fiber
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  /* start the fiber */
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // run scheduler
+  /* run scheduler */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
 
-  // run the scheduler 1000 times
-  // and check the number of active fibers
+  /* run the scheduler 1000 times
+   * and check the number of active fibers */
   for( n = 0; n < 1000; ++n ) {
     sched_cycle( sched, sched_elapsed());
   }
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   scheduler with a single never ending fiber
-//   in this test the fiber is stopped with fiber_stop
+/* --------------------------------------------------------------------------
+ *   scheduler with a single never ending fiber
+ *   in this test the fiber is stopped with fiber_stop
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_forever_stop)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1;
   int n;
   
   f1 = fiber_new(run_forever, NULL);
 
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
   
-  // run the scheduler 1000 times
+  /* run the scheduler 1000 times */
   for( n = 0; n < 1000; ++n ) {
     sched_cycle( sched, sched_elapsed());
   }
 
-  // test fiber still there
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  /* test fiber still there */
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // stop the fiber
+  /* stop the fiber */
   fiber_stop( f1 );
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
 }
 END_TEST
 
 
-// --------------------------------------------------------------------------
-//   wait test : in this test the fiber should be still waiting
-//               at the end of the test !
+/* --------------------------------------------------------------------------
+ *   wait test : in this test the fiber should be still waiting
+ *               at the end of the test !
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_wait_1)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1;
   int n;
   
   f1 = fiber_new(run_wait, NULL);
 
-  // start the fiber
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  /* start the fiber */
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // run the scheduler
-  // and check the number of active fibers
+  /* run the scheduler
+   * and check the number of active fibers */
   for( n = 0; n < 1000; ++n ) {
     sched_cycle( sched, sched_elapsed());
   }
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   wait test : in this test the fiber stop after the sleep
+/* --------------------------------------------------------------------------
+ *   wait test : in this test the fiber stop after the sleep
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_wait_2)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1;
   int n;
   
   f1 = fiber_new(run_wait, NULL);
 
-  // start the fiber
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  /* start the fiber */
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // run the scheduler 
+  /* run the scheduler */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // sleep for a while
+  /* sleep for a while */
   sleep(2);
   
-  // run the scheduler 
+  /* run the scheduler */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   wait test : in this test the fiber should be still waiting
-//               at the end of the test !
+/* --------------------------------------------------------------------------
+ *   wait test : in this test the fiber should be still waiting
+ *               at the end of the test !
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_wait_var_1)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1;
   int n;
   
   f1 = fiber_new(run_wait_var, NULL);
 
-  // start the fiber
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  /* start the fiber */
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // run the scheduler
-  // and check the number of active fibers
+  /* run the scheduler
+   * and check the number of active fibers */
   for( n = 0; n < 1000; ++n ) {
     sched_cycle( sched, sched_elapsed());
   }
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   wait test : in this test the fiber stop after the sleep
+/* --------------------------------------------------------------------------
+ *   wait test : in this test the fiber stop after the sleep
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_wait_var_2)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1;
   int n;
   
   f1 = fiber_new(run_wait_var, NULL);
 
-  // start the fiber
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  /* start the fiber */
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // run the scheduler 
+  /* run the scheduler */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // sleep for a while
+  /* sleep for a while */
   sleep(2);
   
-  // run the scheduler 
+  /* run the scheduler */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   wait test : in this test the fiber stop after the variable has been set
+/* --------------------------------------------------------------------------
+ *   wait test : in this test the fiber stop after the variable has been set
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_wait_var_3)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1;
   int n;
   
   f1 = fiber_new(run_wait_var, NULL);
 
-  // start the fiber
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  /* start the fiber */
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // run the scheduler 
+  /* run the scheduler */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // increment the variable
+  /* increment the variable */
   ++waitvar;
   
-  // run the scheduler 
+  /* run the scheduler */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   wait test : in this test the fiber should be still waiting
-//               at the end of the test !
+/* --------------------------------------------------------------------------
+ *   wait test : in this test the fiber should be still waiting
+ *               at the end of the test !
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_wait_cond_1)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1;
   int n;
   int arg = 111;
   
   f1 = fiber_new(run_wait_cond, (void*) &arg);
 
-  // start the fiber
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  /* start the fiber */
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // run the scheduler
-  // and check the number of active fibers
+  /* run the scheduler
+   * and check the number of active fibers */
   for( n = 0; n < 1000; ++n ) {
     sched_cycle( sched, sched_elapsed());
   }
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   wait test : in this test the fiber should be finished at end of test
+/* --------------------------------------------------------------------------
+ *   wait test : in this test the fiber should be finished at end of test
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_wait_cond_2)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1;
   int n;
   int arg = 111;
   
   f1 = fiber_new(run_wait_cond, (void*) &arg);
 
-  // start the fiber
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  /* start the fiber */
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // run the scheduler 
+  /* run the scheduler */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // sleep for a while
+  /* sleep for a while */
   sleep(2);
   
-  // run the scheduler 
+  /* run the scheduler */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   wait test : in this test the fiber should be finished at end of test
+/* --------------------------------------------------------------------------
+ *   wait test : in this test the fiber should be finished at end of test
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_wait_cond_3)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1;
   int n;
   int arg = 111;
   
   f1 = fiber_new(run_wait_cond, (void*) &arg);
 
-  // start the fiber
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  /* start the fiber */
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // run the scheduler 
+  /* run the scheduler */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // sleep for a while
+  /* sleep for a while */
   arg = 666;
   
-  // run the scheduler 
+  /* run the scheduler */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   scheduler with a fiber that spawn a new fiber and calls join
+/* --------------------------------------------------------------------------
+ *   scheduler with a fiber that spawn a new fiber and calls join
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_spawn_forever_1)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1, *f2;
   int n;
   
   f1 = fiber_new(run_spawn_join_forever, (void*) &f2);
 
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // 1st cycle
+  /* 1st cycle */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 2);
+  ck_assert_int_eq(sched_numfibers(sched), 2);
   ck_assert_int_eq(f1->state, FIBER_RUNNING);
   ck_assert_int_eq(f2->state, FIBER_INIT);
   
-  // 2nd cycle
+  /* 2nd cycle */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 2);
+  ck_assert_int_eq(sched_numfibers(sched), 2);
   ck_assert_int_eq(f1->state, FIBER_SUSPEND);
   ck_assert_int_eq(f2->state, FIBER_RUNNING);
   
-  // run the scheduler 1000 times
+  /* run the scheduler 1000 times */
   for( n = 0; n < 1000; ++n ) {
     sched_cycle( sched, sched_elapsed());
   }
 
-  // test fiber still there
-  ck_assert_int_eq(sched_get_num_fibers(sched), 2);
+  /* test fiber still there */
+  ck_assert_int_eq(sched_numfibers(sched), 2);
   ck_assert_int_eq(f1->state, FIBER_SUSPEND);
   ck_assert_int_eq(f2->state, FIBER_RUNNING);
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
   fiber_free( f2 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   scheduler with a fiber that spawn a new fiber and calls join
+/* --------------------------------------------------------------------------
+ *   scheduler with a fiber that spawn a new fiber and calls join
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_spawn_forever_2)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1, *f2;
   int n;
   
   f1 = fiber_new(run_spawn_join_forever, (void*) &f2);
 
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // 1st cycle
+  /* 1st cycle */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 2);
+  ck_assert_int_eq(sched_numfibers(sched), 2);
   ck_assert_int_eq(f1->state, FIBER_RUNNING);
   ck_assert_int_eq(f2->state, FIBER_INIT);
   
-  // 2nd cycle
+  /* 2nd cycle */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 2);
+  ck_assert_int_eq(sched_numfibers(sched), 2);
   ck_assert_int_eq(f1->state, FIBER_SUSPEND);
   ck_assert_int_eq(f2->state, FIBER_RUNNING);
   
-  // sleep - this will force the join to return
+  /* sleep - this will force the join to return */
   sleep(2);
 
-  // test fiber still there
+  /* test fiber still there */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
   ck_assert_int_eq(f1->state, FIBER_DONE);
   ck_assert_int_eq(f2->state, FIBER_RUNNING);
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
   fiber_free( f2 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   scheduler with a fiber that spawn a new fiber and calls join
+/* --------------------------------------------------------------------------
+ *   scheduler with a fiber that spawn a new fiber and calls join
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_spawn_forever_3)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1, *f2;
   int n;
   
   f1 = fiber_new(run_spawn_join_forever, (void*) &f2);
 
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // 1st cycle
+  /* 1st cycle */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 2);
+  ck_assert_int_eq(sched_numfibers(sched), 2);
   ck_assert_int_eq(f1->state, FIBER_RUNNING);
   ck_assert_int_eq(f2->state, FIBER_INIT);
   
-  // few cycles
+  /* few cycles */
   sched_cycle( sched, sched_elapsed());
   sched_cycle( sched, sched_elapsed());
   sched_cycle( sched, sched_elapsed());
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 2);
+  ck_assert_int_eq(sched_numfibers(sched), 2);
   ck_assert_int_eq(f1->state, FIBER_SUSPEND);
   ck_assert_int_eq(f2->state, FIBER_RUNNING);
   
-  // force f2 to stop
+  /* force f2 to stop */
   fiber_stop(f2);
   ck_assert_int_eq(f2->state, FIBER_TERM);
   
-  // next cycle
+  /* next cycle */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
   ck_assert_int_eq(f1->state, FIBER_SUSPEND);
   ck_assert_int_eq(f2->state, FIBER_DONE);
 
-  // next cycle
+  /* next cycle */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   ck_assert_int_eq(f1->state, FIBER_DONE);
   ck_assert_int_eq(f2->state, FIBER_DONE);
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
   fiber_free( f2 );
 }
 END_TEST
 
-// --------------------------------------------------------------------------
-//   scheduler with a fiber that spawn a new fiber and calls join
+/* --------------------------------------------------------------------------
+ *   scheduler with a fiber that spawn a new fiber and calls join
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_spawn_done_1)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1, *f2;
   int n;
   
   f1 = fiber_new(run_spawn_join_done, (void*) &f2);
 
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // 1st cycle
+  /* 1st cycle */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 2);
+  ck_assert_int_eq(sched_numfibers(sched), 2);
   ck_assert_int_eq(f1->state, FIBER_RUNNING);
   ck_assert_int_eq(f2->state, FIBER_INIT);
   
-  // 2nd cycle
+  /* 2nd cycle */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
   ck_assert_int_eq(f1->state, FIBER_SUSPEND);
   ck_assert_int_eq(f2->state, FIBER_DONE);
   
-  // 3rd cycle
+  /* 3rd cycle */
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   ck_assert_int_eq(f1->state, FIBER_DONE);
   ck_assert_int_eq(f2->state, FIBER_DONE);
   
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
   fiber_free( f2 );
 }
 END_TEST
 
 
-// --------------------------------------------------------------------------
-//   test functions that set fiber attributes
+/* --------------------------------------------------------------------------
+ *   test functions that set fiber attributes
+ * --------------------------------------------------------------------------*/
 START_TEST (test_single_fiber_set_parameters)
 {
-  scheduler_t *sched = scheduler_new();
+  scheduler_t *sched = sched_new();
   fiber_t *f1;
   int n;
   
   f1 = fiber_new(run_forever, NULL);
 
-  // extra parameter
+  /* extra parameter */
   ck_assert_int_eq( fiber_set_stack_size(f1, 32768), FIBER_OK);
   ck_assert_int_eq( fiber_get_extra(f1) == NULL, 1);
   ck_assert_int_eq( fiber_set_extra(f1, (void*) 1111 ), FIBER_OK );
   ck_assert_int_eq( fiber_get_extra(f1) == (void*) 1111, 1);
 
-  // function pointers
+  /* function pointers */
   ck_assert_int_eq( f1->pf_init == NULL, 1);
   ck_assert_int_eq( f1->pf_term == NULL, 1);
   ck_assert_int_eq( f1->pf_done == NULL, 1);
@@ -794,46 +809,46 @@ START_TEST (test_single_fiber_set_parameters)
   ck_assert_int_eq( f1->pf_term == &term_func, 1);
   ck_assert_int_eq( f1->pf_done == &done_func, 1);
 
-  // check erroneous use of function
+  /* check erroneous use of function */
   ck_assert_int_eq( fiber_set_stack_size(NULL, 32768), FIBER_NO_SUCH_FIBER );
   ck_assert_int_eq( fiber_set_extra(NULL, (void*) 1111 ), FIBER_NO_SUCH_FIBER );
   ck_assert_int_eq( fiber_set_init_func( NULL, &init_func ), FIBER_NO_SUCH_FIBER );
   ck_assert_int_eq( fiber_set_term_func( NULL, &term_func ), FIBER_NO_SUCH_FIBER );
   ck_assert_int_eq( fiber_set_done_func( NULL, &done_func ), FIBER_NO_SUCH_FIBER );
 
-  // start the fiber
-  ck_assert_int_eq(sched_get_num_fibers(sched), 0);
+  /* start the fiber */
+  ck_assert_int_eq(sched_numfibers(sched), 0);
   fiber_start( sched, f1);
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // check erroneous use of function
+  /* check erroneous use of function */
   ck_assert_int_eq( fiber_set_stack_size(f1, 32768), FIBER_ILLEGAL_STATE );
   ck_assert_int_eq( fiber_set_extra(f1, (void*) 1111 ), FIBER_OK );
   ck_assert_int_eq( fiber_set_init_func( f1, &init_func ), FIBER_ILLEGAL_STATE );
   ck_assert_int_eq( fiber_set_term_func( f1, &term_func ), FIBER_ILLEGAL_STATE );
   ck_assert_int_eq( fiber_set_done_func( f1, &done_func ), FIBER_ILLEGAL_STATE );
 
-  // run the scheduler 
+  /* run the scheduler */
   sched_cycle( sched, sched_elapsed());
   sched_cycle( sched, sched_elapsed());
   sched_cycle( sched, sched_elapsed());
-  ck_assert_int_eq(sched_get_num_fibers(sched), 1);
+  ck_assert_int_eq(sched_numfibers(sched), 1);
 
-  // check erroneous use of function
+  /* check erroneous use of function */
   ck_assert_int_eq( fiber_set_stack_size(f1, 32768), FIBER_ILLEGAL_STATE );
   ck_assert_int_eq( fiber_set_extra(f1, (void*) 1111 ), FIBER_OK );
   ck_assert_int_eq( fiber_set_init_func( f1, &init_func ), FIBER_ILLEGAL_STATE );
   ck_assert_int_eq( fiber_set_term_func( f1, &term_func ), FIBER_ILLEGAL_STATE );
   ck_assert_int_eq( fiber_set_done_func( f1, &done_func ), FIBER_ILLEGAL_STATE );
 
-  // clean
-  scheduler_free( sched );
+  /* clean */
+  sched_free( sched );
   fiber_free( f1 );
 }
 END_TEST
 
 
-// scheduler test suite
+/* scheduler test suite */
 Suite *sched_suite(void)
 {
   Suite *s;

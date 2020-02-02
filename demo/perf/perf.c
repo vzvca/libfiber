@@ -20,7 +20,7 @@ int main()
   int i;
 
   /* create scheduler */
-  sched = scheduler_new();
+  sched = sched_new();
   
   /* create 100 fiber */
   for( i = 0; i < 100; ++i ) {

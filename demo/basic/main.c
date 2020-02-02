@@ -74,7 +74,7 @@ int main( int argc, char **argv)
   set_log_level(LOG_TRACE);
   
   /* create scheduler */
-  sched = scheduler_new();
+  sched = sched_new();
 
   /* create fibers */
   f1 = fiber_new(fiber1, NULL);
@@ -93,7 +93,7 @@ int main( int argc, char **argv)
   sched_cycle( sched, sched_elapsed());
   sched_cycle( sched, sched_elapsed());
 
-  scheduler_free(sched);
+  sched_free(sched);
   
   return 0;
 }

@@ -45,6 +45,8 @@ typedef struct extra_s {
   int hasdata;  /* tells if data is ready on socket */
 } extra_t;
 
+/* boundary used for multipart data */
+/* this boundary is used in the video sample */
 static char *boundary = "--myboundary";
 
 /* this set contains the current sockets to watch */
@@ -290,12 +292,14 @@ void generic_task( fiber_t *fiber )
       location = strtok( buffer + 4, " " );
       
       if ( strcmp(location, "/") == 0 ) {
-	puts("home");
 	home( fiber );
       }
-      else if ( strncmp(location+1, "video.mjpeg", 11) == 0 ) {
+      else if ( strcmp(location, "/index.html") == 0 ) {
+	home( fiber );
+      }
+      else if ( strncmp(location+1, "traffic.mjpeg", 11) == 0 ) {
 	puts("video");
-	video( fiber );
+	traffic( fiber );
       }
       else if ( isdigit(location[1]) ) {
 	puts("image");
@@ -495,7 +499,7 @@ void server( short portno )
   FD_SET( serverfd, &cnxset );
 
   /* create scheduler */
-  sched = scheduler_new();
+  sched = sched_new();
 
   /* create the fiber that will accept
    * incoming connections */

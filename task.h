@@ -26,6 +26,7 @@
 #define __FIBER_TASK_H__
 
 #include <stdint.h>
+#include <limits.h>
 
 #include "logger.h"
 
@@ -391,7 +392,7 @@ int sched_free( scheduler_t *sched );
  * Start running a scheduler at the given frequency
  * ---------------------------------------------------------------------------
  */
-void scheduler_run( uint32_t period );
+void sched_run( uint32_t period );
 
 /*
  * ---------------------------------------------------------------------------
