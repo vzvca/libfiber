@@ -131,7 +131,7 @@ static void send_response( int fd, int code )
     writeln( fd, "HTTP/1.1 200 OK");
     break;
   default:
-    writeln( fd, "HTTP/1.1 404 NOT FOUND");
+    writeln( fd, "HTTP/1.1 404 Not Found");
     break;
   }
 }
@@ -196,16 +196,25 @@ void video( fiber_t *fiber, char *fname )
   fclose(fin);
 }
 
+/* --------------------------------------------------------------------------
+ *  Sends video of traffic in New York
+ * --------------------------------------------------------------------------*/
 void traffic( fiber_t *fiber )
 {
   video( fiber, "www/traffic.mjpeg" );
 }
 
+/* --------------------------------------------------------------------------
+ *  Sends video of a bar in Barcelona
+ * --------------------------------------------------------------------------*/
 void ovisobar( fiber_t *fiber )
 {
   video( fiber, "www/oviso.mjpeg" );
 }
 
+/* --------------------------------------------------------------------------
+ *  Sends music
+ * --------------------------------------------------------------------------*/
 void music( fiber_t *fiber, char *fname )
 {
   int   n, fd = get_fiber_fd(fiber);
@@ -228,9 +237,27 @@ void music( fiber_t *fiber, char *fname )
   fclose(fin);
 }
 
+/* --------------------------------------------------------------------------
+ *  Sends music
+ * --------------------------------------------------------------------------*/
 void meydan( fiber_t *fiber )
 {
   music( fiber, "www/Meydn-SynthwaveVibe.mp3");
+}
+
+/* --------------------------------------------------------------------------
+ *  Checks if it is a card
+ * --------------------------------------------------------------------------*/
+int iscard( char *name )
+{
+  int i;
+  if (strcmp( name + 2, ".gif" )) {
+    return 0;
+  }
+  for( i = 0; i < 52 ; ++i ) {
+    if ( strncmp( name, allcards[i]->name, 2) == 0 ) return 1;
+  }
+  return 0;
 }
 
 /* --------------------------------------------------------------------------
@@ -280,15 +307,34 @@ void error404( fiber_t *fiber )
   writeln( fd, "Content-Length: 0");
   writeln( fd, "Connection: Closed");
   writeln( fd, "");
+  writeln( fd, "<h1>Error 404 : Not Found</h1>");
+}
+
+/* --------------------------------------------------------------------------
+ *  Sends an image
+ * --------------------------------------------------------------------------*/
+void card( fiber_t *fiber, char *name )
+{
+  int i;
+  for ( i = 0; i < 52; ++i ) {
+    if ( strncmp( name, allcards[i]->name, 2 ) == 0 ) break;
+  }
+  if ( i < 52 ) {
+    image_headers( fd, allcards[i] );
+    safewrite( fd, allcards[i]->bin, allcards[i]->sz );
+  }
+  else {
+    error404( fiber );
+  }
 }
 
 /* --------------------------------------------------------------------------
  *  Send home page
  * --------------------------------------------------------------------------*/
-void home( fiber_t *fiber )
+void html( fiber_t *fiber, char *fname )
 {
   int fd = get_fiber_fd(fiber);
-  char *page = "<html><head></head><body><img width=640 height=480 src='video.mjpeg'></body></html>";
+  FILE *fin;
   
   send_response( fd, 200);
   
@@ -297,8 +343,30 @@ void home( fiber_t *fiber )
   writeln( fd, "Content-Type: text/html; charset=iso-8859-1");
   writeln( fd, "Content-Length: %d", strlen(page)+1);
   writeln( fd, "" );
+  
+  fin = fopen( fname, "rb" );
+  do {
+    n = fread( buffer, 1, sizeof(buffer), fin);
+    safewrite( fd, buffer, n );
+    fiber_yield( fiber);
+  } while(n == sizeof(buffer));
+  fclose(fin);
+}
 
-  writeln( fd, page);
+/* --------------------------------------------------------------------------
+ *  Send home page
+ * --------------------------------------------------------------------------*/
+void home( fiber_t *fiber )
+{
+  html( fiber, "www/index.html" );
+}
+
+/* --------------------------------------------------------------------------
+ *  Send cards
+ * --------------------------------------------------------------------------*/
+void deck52( fiber_t *fiber )
+{
+  html( fiber, "www/cards.html" );
 }
 
 /* --------------------------------------------------------------------------
@@ -328,18 +396,32 @@ void generic_task( fiber_t *fiber )
       location = strtok( buffer + 4, " " );
       
       if ( strcmp(location, "/") == 0 ) {
+	debug("home page");
 	home( fiber );
       }
       else if ( strcmp(location, "/index.html") == 0 ) {
+	debug("home page");
 	home( fiber );
       }
+      else if ( strcmp(location, "/cards.html") == 0 ) {
+	debug("52 cards html page");
+	deck52( fiber );
+      }
       else if ( strncmp(location+1, "traffic.mjpeg", 11) == 0 ) {
-	puts("video");
+	debug("traffic video");
 	traffic( fiber );
       }
-      else if ( isdigit(location[1]) ) {
-	puts("image");
-	image( fiber );
+      else if ( strncmp(location+1, "bar.mjpeg", 11) == 0 ) {
+	debug("bar in Spain video");
+	ovisobar( fiber );
+      }
+      else if ( strncmp(location+1, "meydan.mp3", 11) == 0 ) {
+	debug("music");
+	meydan( fiber );
+      }
+      else if ( iscard(location+1) ) {
+	debug("card");
+	card( fiber );
       }
       else {
 	puts("404");
@@ -378,7 +460,7 @@ void done( fiber_t *fiber )
     }
   }
   /* safe to free fiber. Its stack has already been deallocated */
-  free( fiber->extra );
+  free( fiber_get_extra( fiber ) );
   free( fiber );
 }
 
@@ -558,4 +640,3 @@ void server( short portno )
     sched_cycle( sched, sched_elapsed() );
   }
 }
-
