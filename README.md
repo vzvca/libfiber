@@ -48,7 +48,7 @@ A few demonstrations are provided :
 
 The URL for the demo is http://127.0.0.1:5001. On the screensht there are two videos streamed by the server.
 
-![alt text](doc/demo-http-1.png)
+![alt text](doc/http-demo-1.png)
 
 
 ### Implementation
