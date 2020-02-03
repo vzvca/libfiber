@@ -35,6 +35,7 @@
 #include <netinet/tcp.h>
 #include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include "task.h"
 #include "card.h"
@@ -42,7 +43,6 @@
 /* data associated to a fiber */
 typedef struct extra_s {
   int fd;       /* socket attached to fiber */
-  int pause;    /* time to pause between each image sent */
   int hasdata;  /* tells if data is ready on socket */
 } extra_t;
 
@@ -70,15 +70,6 @@ static int get_fiber_fd( fiber_t *f )
 {
   extra_t *data = (extra_t*) fiber_get_extra(f);
   return data->fd;
-}
-
-/* --------------------------------------------------------------------------
- *  Get the pause flag of fiber
- * --------------------------------------------------------------------------*/
-static int get_fiber_pause( fiber_t *f )
-{
-  extra_t *data = (extra_t*) fiber_get_extra(f);
-  return data->pause;
 }
 
 /* --------------------------------------------------------------------------
@@ -135,23 +126,11 @@ static void send_response( int fd, int code )
 }
 
 /* --------------------------------------------------------------------------
- *  Returns data string
- * --------------------------------------------------------------------------*/
-static char *date()
-{
-  return "Mon, 1 Jan 2030 12:34:56 GMT";
-}
-
-/* --------------------------------------------------------------------------
  *  Send headers
  * --------------------------------------------------------------------------*/
 static void request_headers( int fd )
 {
-  //writeln( fd, "Cache-Control: no-store, no-cache, must-revalidate, pre-check=0, post-check=0, max-age=0");
-  //writeln( fd, "Connection: close");
   writeln( fd, "Content-Type: multipart/x-mixed-replace; boundary=\"%s\"", boundary+2);
-  //writeln( fd, "Expires: %s", date());
-  //writeln( fd, "Pragma': no-cache");
   writeln( fd, "" );
 }
 
@@ -160,7 +139,6 @@ static void request_headers( int fd )
  * --------------------------------------------------------------------------*/
 static void image_headers( int fd, card_t *card )
 {
-  //writeln( fd, "X-Timestamp: time.time()");
   /* mime-type must be set according file content*/
   writeln( fd, "Content-Type: image/gif");
   writeln( fd, "Content-Length: %d", card->sz );
@@ -174,20 +152,26 @@ static void pausef( fiber_t *fiber )
 {
   int n, nothing = 1, fd = get_fiber_fd(fiber);
   extra_t *extra = fiber_get_extra( fiber );
-  
+  char buffer[4096];
+
+ redo:
   fiber_yield( fiber );
 
   /* data pending ? */
-  if ( 0 && extra->hasdata ) {
-    char buffer[4096];
+  if ( extra->hasdata ) {
     extra->hasdata = 0;
     do {
       n = read( fd, buffer, sizeof(buffer));
+      if ( n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK) ) {
+	error("not ready !\n");
+	goto redo;
+      }
       if ( n > 0 ) {
 	nothing = 0;
       }
     } while ( n == sizeof(buffer) );
     if ( nothing ) {
+      error("remote end close connection !\n");
       fiber_stop( fiber );
       fiber_yield( fiber );
     }
@@ -337,7 +321,6 @@ void html( fiber_t *fiber, char *fname )
   writeln( fd, "Server: libfiber (linux)");
   writeln( fd, "Connection: Closed");
   writeln( fd, "Content-Type: text/html; charset=iso-8859-1");
-  //writeln( fd, "Content-Length: %d", strlen(page)+1);
   writeln( fd, "" );
   
   fin = fopen( fname, "rb" );
@@ -481,14 +464,11 @@ int selectloop(void) {
   tv.tv_usec = 5000;
 
   retval = select( cnxmaxfd+1, &rdfs, NULL, NULL, &tv);
-  /* Don't rely on the value of tv now! */
 
   if (retval == -1) {
     perror("select()");
     
   } else if (retval) {
-    //printf("Data is available now.\n");
-
     /* loop over connections */
     for( i = 0; i < CNXMAX; ++i ) {
       fiber_t *fiber = cnx2fiber[i];
@@ -501,9 +481,6 @@ int selectloop(void) {
 	}
       }
     }
-    
-  } else {
-    //printf("No data within five seconds.\n");
   }
 }
 
@@ -525,18 +502,21 @@ void mktask( scheduler_t *sched, int fd )
     error("Maximum number of connection reached.\n");
   }
   else { 
+    int flags;
+
     extra = (extra_t*) malloc(sizeof(extra_t));
     extra->fd = fd;
-    extra->pause = 1000; //200 + (rand() % 800); /* pause between 200ms to 1s */
     extra->hasdata = 0;
 
+    flags = fcntl(fd ,F_GETFL, 0);
+    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    
     FD_SET( fd, &cnxset );
     if ( fd > cnxmaxfd ) {
       cnxmaxfd = fd;
     }
   
     fiber = fiber_new( generic_task, extra);
-    //fiber_set_stack_size( fiber, 8192);
     fiber_set_done_func( fiber, done);
     fiber_start( sched, fiber);
 
@@ -623,11 +603,9 @@ void server( short portno )
     exit(1);
   }
   extra->fd = serverfd;
-  extra->pause = 0;
   extra->hasdata = 0;
 
   fiber = fiber_new( accept_task, extra );
-  //fiber_set_stack_size( fiber, 8192);
   fiber_start( sched, fiber );
 
   cnx2fiber[0] = fiber;
