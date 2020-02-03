@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
 
 #include "card.h"
 
@@ -60,25 +61,18 @@ card_t *allcards[] =
 
 static int init()
 {
-      char buffer[64];
+  char buffer[64];
   int i;
   for ( i = 0; i < 52; ++i ) {
     card_t *pcard = allcards[i];
     pcard->bin = malloc(strlen(pcard->b64));
     pcard->sz = b64decode( pcard->b64, pcard->bin );
-    {
-      FILE *fout;
-      sprintf(buffer, "%d.gif", i);
-      fout = fopen( buffer, "wb");
-      fwrite( pcard->bin, pcard->sz, 1, fout);
-      fclose(fout);
-    }
   }
 }
 
 int main( int argc, char **argv )
 {
-  FILE *fout;
+  signal( SIGPIPE, SIG_IGN );
   init();
   server(5001);
   return 0;

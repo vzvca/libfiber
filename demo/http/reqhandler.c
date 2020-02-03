@@ -27,6 +27,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys/ioctl.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -97,10 +98,7 @@ static void safewrite(int fd, const char *b, size_t n)
   size_t w = 0;
   while (w < n){
     ssize_t s = write(fd, b + w, n - w);
-    if (s < 0 && errno != EINTR)
-      return;
-    else if (s < 0)
-      s = 0;
+    if (s < 0 ) return;
     w += (size_t)s;
   }
 }
@@ -170,6 +168,33 @@ static void image_headers( int fd, card_t *card )
 } 
 
 /* --------------------------------------------------------------------------
+ *  Pause fiber and discard input
+ * --------------------------------------------------------------------------*/
+static void pausef( fiber_t *fiber )
+{
+  int n, nothing = 1, fd = get_fiber_fd(fiber);
+  extra_t *extra = fiber_get_extra( fiber );
+  
+  fiber_yield( fiber );
+
+  /* data pending ? */
+  if ( 0 && extra->hasdata ) {
+    char buffer[4096];
+    extra->hasdata = 0;
+    do {
+      n = read( fd, buffer, sizeof(buffer));
+      if ( n > 0 ) {
+	nothing = 0;
+      }
+    } while ( n == sizeof(buffer) );
+    if ( nothing ) {
+      fiber_stop( fiber );
+      fiber_yield( fiber );
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
  *  Send mjpeg video
  * --myboundary
  * Content-Type: image/jpeg
@@ -187,13 +212,15 @@ void video( fiber_t *fiber, char *fname )
   /* Response headers (multipart) */
   request_headers( fd );
 
-  fin = fopen( fname, "rb" );
-  do {
-    n = fread( buffer, 1, sizeof(buffer), fin);
-    safewrite( fd, buffer, n );
-    fiber_yield( fiber);
-  } while(n == sizeof(buffer));
-  fclose(fin);
+  while(1) {
+    fin = fopen( fname, "rb" );
+    do {
+      n = fread( buffer, 1, sizeof(buffer), fin);
+      safewrite( fd, buffer, n );
+      pausef( fiber );
+    } while(n == sizeof(buffer));
+    fclose(fin);
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -232,7 +259,7 @@ void music( fiber_t *fiber, char *fname )
   do {
     n = fread( buffer, 1, sizeof(buffer), fin);
     safewrite( fd, buffer, n );
-    fiber_yield( fiber);
+    pausef( fiber );
   } while(n == sizeof(buffer));
   fclose(fin);
 }
@@ -261,40 +288,6 @@ int iscard( char *name )
 }
 
 /* --------------------------------------------------------------------------
- *  Send multipart image
- * --------------------------------------------------------------------------*/
-void image( fiber_t *fiber )
-{
-  card_t *card;
-  int pause, fd = get_fiber_fd(fiber);
-
-  /* reply OK */
-  send_response( fd, 200);
-     
-  /* Response headers (multipart) */
-  request_headers( fd );
- 
-  while(1) {
-    
-    /* boundary */
-    writeln( fd, "" );
-    writeln( fd, boundary );
-    
-    /* choose a random card */
-    card = allcards[rand() % 52];
-    
-    /* dump headers */
-    image_headers( fd, card );
-
-    /* dump image */
-    safewrite( fd, card->bin, card->sz );
-
-    /* wait a while */
-    fiber_yield( fiber );
-  }
-}
-
-/* --------------------------------------------------------------------------
  *  Send error 404 reply
  * --------------------------------------------------------------------------*/
 void error404( fiber_t *fiber )
@@ -315,11 +308,13 @@ void error404( fiber_t *fiber )
  * --------------------------------------------------------------------------*/
 void card( fiber_t *fiber, char *name )
 {
+  int fd = get_fiber_fd(fiber);
   int i;
   for ( i = 0; i < 52; ++i ) {
     if ( strncmp( name, allcards[i]->name, 2 ) == 0 ) break;
   }
   if ( i < 52 ) {
+    send_response( fd, 200);
     image_headers( fd, allcards[i] );
     safewrite( fd, allcards[i]->bin, allcards[i]->sz );
   }
@@ -333,7 +328,8 @@ void card( fiber_t *fiber, char *name )
  * --------------------------------------------------------------------------*/
 void html( fiber_t *fiber, char *fname )
 {
-  int fd = get_fiber_fd(fiber);
+  int n, fd = get_fiber_fd(fiber);
+  char  buffer[4096];
   FILE *fin;
   
   send_response( fd, 200);
@@ -341,7 +337,7 @@ void html( fiber_t *fiber, char *fname )
   writeln( fd, "Server: libfiber (linux)");
   writeln( fd, "Connection: Closed");
   writeln( fd, "Content-Type: text/html; charset=iso-8859-1");
-  writeln( fd, "Content-Length: %d", strlen(page)+1);
+  //writeln( fd, "Content-Length: %d", strlen(page)+1);
   writeln( fd, "" );
   
   fin = fopen( fname, "rb" );
@@ -399,11 +395,11 @@ void generic_task( fiber_t *fiber )
 	debug("home page");
 	home( fiber );
       }
-      else if ( strcmp(location, "/index.html") == 0 ) {
+      else if ( strcmp(location+1, "index.html") == 0 ) {
 	debug("home page");
 	home( fiber );
       }
-      else if ( strcmp(location, "/cards.html") == 0 ) {
+      else if ( strcmp(location+1, "cards.html") == 0 ) {
 	debug("52 cards html page");
 	deck52( fiber );
       }
@@ -421,7 +417,7 @@ void generic_task( fiber_t *fiber )
       }
       else if ( iscard(location+1) ) {
 	debug("card");
-	card( fiber );
+	card( fiber, location + 1 );
       }
       else {
 	puts("404");
@@ -500,7 +496,8 @@ int selectloop(void) {
 	extra_t *extra = fiber_get_extra( fiber );
 	int fd = get_fiber_fd( fiber );
 	if ( FD_ISSET( fd, &rdfs) ) {
-	  extra->hasdata = 1;  /* it will wake up the fiber */
+	  /* it will wake up the fiber */
+	  extra->hasdata = 1; 
 	}
       }
     }
