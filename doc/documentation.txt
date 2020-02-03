@@ -1,2 +1,0 @@
-
-Cette librairie implémente des "user-space thread" encore appelées "fibres" (parfois "coroutines", bien que les coroutines soient un concept plus large)

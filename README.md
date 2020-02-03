@@ -44,6 +44,13 @@ A few demonstrations are provided :
  * basic : in this example, three fibers are created. They all do a small task, the scheduler run 3 times ans stops.
  * http: a small http server is started. A new fiber is started each time a new connection is done. The server is single threaded but the fibers share the CPU and handles several long lasting requests (like video delivery) at the same time.
 
+#### Screenshot of http demo
+
+The URL for the demo is http://127.0.0.1:5001. On the screensht there are two videos streamed by the server.
+
+![alt text](doc/demo-http-1.png)
+
+
 ### Implementation
 
 It was possible ans easier to use POSIX ucontext (with makecontext(), setcontext(), getcontext() and swapcontext()) but I choosed to use setjmp() / longjmp() C functions. The hard part is how to get a different stack for each fiber. There are several way to do this but I used sigaltstack() which allows to set an alternate stack for a signal handler. 
