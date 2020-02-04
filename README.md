@@ -8,14 +8,14 @@ This small librairy implements user land cooperative threads, they are called fi
 
 Each fiber has its own stack and shares the CPU with other fibers.
 When it resumes execution, it restarts where it was just like a normal thread.
-The difference with a `normal' thread is that fibers to not run concurrently but sequentially in the same `kernel' thread.
+The difference with a 'normal' thread is that fibers to not run concurrently but sequentially in the same 'kernel' thread. Another difference is that fibers use a cooperative (vs preemptive) multitasking model.
 
 It has advantages :
  * there is no need to lock data used by several fibers because they access this data sequentially
- * they are more lighter than `kernel' thread and context switch is very fast
+ * they are more lighter than 'kernel' thread and context switch is very fast
 
 And it has drawbacks too :
- * each fiber must be `fair' with other fibers and yield the CPU to give others a chance to run. If a single fiber fails to do so, the whole program will hang.
+ * each fiber must be 'fair' with other fibers and yield the CPU to give others a chance to run. If a single fiber fails to do so, the whole program will hang.
  * fibers will not take advantage of multi-processor machines, they will not spread naturally across the available CPU cores.
 
 
@@ -44,6 +44,8 @@ A few demonstrations are provided :
  * basic : in this example, three fibers are created. They all do a small task, the scheduler run 3 times ans stops.
  * http: a small http server is started. A new fiber is started each time a new connection is done. The server is single threaded but the fibers share the CPU and handles several long lasting requests (like video delivery) at the same time.
 
+In each demo directory there is a makefile to compile the demo.
+
 #### Screenshot of http demo
 
 The URL for the demo is http://127.0.0.1:5001. On the screensht there are two videos streamed by the server.
@@ -65,5 +67,13 @@ Interstingly, in the http example, there is a base64 decoder with a coroutine li
 
 ### API documentation
 
-There are two kinds of objects in the library schedulers and fibers. A fiber can't run by itself and must be started in a scheduler.
+The API documentation is included in the task.h source file.
+
+There are two kinds of objects in the library schedulers (C type `scheduler_t`) and fibers (C type `fiber_t`). A fiber can't run by itself and must be started in a scheduler, which means that at least you must instantiate a scheduler (with `sched_new()`) and a fiber object (with `fiber_new()`). A fiber is added to a scheduler using `fiber_start()`.
+
+The API allows to run a scheduler cycle using `sched_cycle()`. So if you need to run the fibers foreever you need to wrap the call to `sched_cycle()` in an infinite loop.
+
+The schedule will run all fibers in turns and manage their states (i.e. transition between states). Fibers must cooperate and each running fibers must give back the CPU to give the others fibers a chance to run. A fiber give back the CPU using `fiber_yield()` or functions in the `fiber_wait_XXX()` family. With `fiber_yield()`, the fiber will restart at next scheduler cycle, which is not sure with `fiber_wait_XXX()` functions which suspend the execution until a condition is met.
+
+Fibers terminates when their `run()` function returns. They can be forced to stop with a call to `fiber_stop()`. A fiber can stop itself with `fiber_stop()` but it just change its state, to give back the CPU a call to `fiber_yield()` must follow.
 
