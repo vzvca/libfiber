@@ -44,6 +44,7 @@
 typedef struct extra_s {
   int fd;       /* socket attached to fiber */
   int hasdata;  /* tells if data is ready on socket */
+  FILE *fin;    /* some fibers open a file, that where they store it */
 } extra_t;
 
 /* boundary used for multipart data */
@@ -186,9 +187,9 @@ static void pausef( fiber_t *fiber )
  * --------------------------------------------------------------------------*/
 void video( fiber_t *fiber, char *fname )
 {
+  extra_t *extra = fiber_get_extra( fiber );
   int   n, fd = get_fiber_fd(fiber);
   char  buffer[4096];
-  FILE *fin;
 
   /* reply OK */
   send_response( fd, 200);
@@ -197,13 +198,14 @@ void video( fiber_t *fiber, char *fname )
   request_headers( fd );
 
   while(1) {
-    fin = fopen( fname, "rb" );
+    extra->fin = fopen( fname, "rb" );
     do {
-      n = fread( buffer, 1, sizeof(buffer), fin);
+      n = fread( buffer, 1, sizeof(buffer), extra->fin);
       safewrite( fd, buffer, n );
       pausef( fiber );
     } while(n == sizeof(buffer));
-    fclose(fin);
+    fclose(extra->fin);
+    extra->fin = NULL;
   }
 }
 
@@ -228,9 +230,9 @@ void ovisobar( fiber_t *fiber )
  * --------------------------------------------------------------------------*/
 void music( fiber_t *fiber, char *fname )
 {
+  extra_t *extra = fiber_get_extra( fiber );
   int   n, fd = get_fiber_fd(fiber);
   char  buffer[4096];
-  FILE *fin;
 
   /* reply OK */
   send_response( fd, 200);
@@ -239,13 +241,14 @@ void music( fiber_t *fiber, char *fname )
   writeln( fd, "Content-Type: audio/mpeg");
   writeln( fd, "" );
 
-  fin = fopen( fname, "rb" );
+  extra->fin = fopen( fname, "rb" );
   do {
-    n = fread( buffer, 1, sizeof(buffer), fin);
+    n = fread( buffer, 1, sizeof(buffer), extra->fin);
     safewrite( fd, buffer, n );
     pausef( fiber );
   } while(n == sizeof(buffer));
-  fclose(fin);
+  fclose(extra->fin);
+  extra->fin = NULL;
 }
 
 /* --------------------------------------------------------------------------
@@ -312,9 +315,9 @@ void card( fiber_t *fiber, char *name )
  * --------------------------------------------------------------------------*/
 void html( fiber_t *fiber, char *fname )
 {
+  extra_t *extra = fiber_get_extra( fiber );
   int n, fd = get_fiber_fd(fiber);
   char  buffer[4096];
-  FILE *fin;
   
   send_response( fd, 200);
   
@@ -323,13 +326,14 @@ void html( fiber_t *fiber, char *fname )
   writeln( fd, "Content-Type: text/html; charset=iso-8859-1");
   writeln( fd, "" );
   
-  fin = fopen( fname, "rb" );
+  extra->fin = fopen( fname, "rb" );
   do {
-    n = fread( buffer, 1, sizeof(buffer), fin);
+    n = fread( buffer, 1, sizeof(buffer), extra->fin);
     safewrite( fd, buffer, n );
     fiber_yield( fiber);
   } while(n == sizeof(buffer));
-  fclose(fin);
+  fclose(extra->fin);
+  extra->fin = NULL;
 }
 
 /* --------------------------------------------------------------------------
@@ -419,7 +423,13 @@ void generic_task( fiber_t *fiber )
  * --------------------------------------------------------------------------*/
 void done( fiber_t *fiber )
 {
+  extra_t *extra = fiber_get_extra( fiber );
   int i, fd = get_fiber_fd(fiber);
+
+  if ( extra->fin != NULL ) {
+    fclose( extra->fin );
+  }
+  
   for ( i = 0; i < CNXMAX; ++i ) {
     if ( cnx2fiber[i] == fiber ) {
       cnx2fiber[i] = NULL;
@@ -507,6 +517,7 @@ void mktask( scheduler_t *sched, int fd )
     extra = (extra_t*) malloc(sizeof(extra_t));
     extra->fd = fd;
     extra->hasdata = 0;
+    extra->fin = NULL;
 
     flags = fcntl(fd ,F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
