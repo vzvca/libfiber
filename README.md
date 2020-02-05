@@ -19,8 +19,6 @@ And it has drawbacks too :
  * fibers will not take advantage of multi-processor machines, they will not spread naturally across the available CPU cores.
 
 
-In this libray, a fiber is associated to a scheduler. A scheduler will contain many fibers. A scheduler can run by itself at a periodic rate or can be triggered manually.
-
 ### Compilation
 
 This library has been tested on linux debian on amd64, armhf and ppc64 architectures and on Cygwin. A slightly modified version has been used in production code.
@@ -55,7 +53,7 @@ The URL for the demo is http://127.0.0.1:5001. On the screensht there are two vi
 
 ### Implementation
 
-It was possible ans easier to use POSIX ucontext (with makecontext(), setcontext(), getcontext() and swapcontext()) but I choosed to use setjmp() / longjmp() C functions. The hard part is how to get a different stack for each fiber. There are several way to do this but I used sigaltstack() which allows to set an alternate stack for a signal handler. 
+It was possible ans easier to use POSIX ucontext (with `makecontext()`, `setcontext()`, `getcontext()` and `swapcontext()`) but I choosed to use `setjmp()` / `longjmp()` C functions. The hard part is how to get a different stack for each fiber. There are several way to do this but I used `sigaltstack()` which allows to set an alternate stack for a signal handler. 
 
 ### Other fibers / coroutines implementations
 
@@ -65,7 +63,7 @@ The C++ boost libraries have both and the implementation is fast and easy to use
 
 Interstingly, in the http example, there is a base64 decoder with a coroutine like implementation. The trick used there is initially due to Simon Tatham.
 
-### API documentation
+### Usage and API documentation
 
 The API documentation is included in the task.h source file.
 
