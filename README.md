@@ -4,7 +4,7 @@ Userland cooperative threads aka fibers aka green threads aka coroutines.
 
 ## Introduction
 
-This small librairy implements user land cooperative threads, they are called fibers. Fibers can be seen as a specialized case of coroutines which are a wider concept.
+This small library implements user land cooperative threads, they are called fibers. Fibers can be seen as a specialized case of coroutines which are a wider concept.
 
 Each fiber has its own stack and shares the CPU with other fibers.
 When it resumes execution, it restarts where it was just like a normal thread.
@@ -41,14 +41,46 @@ A few demonstrations are provided :
  * perf : this is the most simple example. It will create 100 fibers which all do the same, they increment a global counter. The program stops when the counter reaches 50000000, which corresponds to 50000000 context switch between fibers. It then prints the time needed and the number of context switches.
  * basic : in this example, three fibers are created. They all do a small task, the scheduler run 3 times ans stops.
  * http: a small http server is started. A new fiber is started each time a new connection is done. The server is single threaded but the fibers share the CPU and handles several long lasting requests (like video delivery) at the same time.
-
+ * sieve : this demonstration compute the 20 first prime numbers using integer generators implemented using fibers.
+ 
 In each demo directory there is a makefile to compile the demo.
 
 #### Screenshot of http demo
 
-The URL for the demo is http://127.0.0.1:5001. On the screensht there are two videos streamed by the server.
+The URL for the demo is http://127.0.0.1:5001. On the screenshot there are two videos streamed by the server.
 
 ![alt text](doc/http-demo-1.png)
+
+#### On the sieve demo
+
+In this demonstration fibers are created on the fly and fibers call recursively other fibers and wait until an answer (an integer) is returned. Ths example shows how to implement blocking and non-blocking calls with arguments and results between fibers. It is implemented on the top of *channels* which are designed to post messages between fibers.
+
+Here is the output of the program :
+
+~~~~
+localadmin@buster:~/libfiber/demo/sieve$ ./sieve 
+prime#1 = 2
+prime#2 = 3
+prime#3 = 5
+prime#4 = 7
+prime#5 = 11
+prime#6 = 13
+prime#7 = 17
+prime#8 = 19
+prime#9 = 23
+prime#10 = 29
+prime#11 = 31
+prime#12 = 37
+prime#13 = 41
+prime#14 = 43
+prime#15 = 47
+prime#16 = 53
+prime#17 = 59
+prime#18 = 61
+prime#19 = 67
+prime#20 = 71
+~~~~
+
 
 
 ### Implementation

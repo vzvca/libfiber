@@ -12,6 +12,7 @@ enum log_level_e {
 
 void set_log_level( uint8_t level);
 void fatal( const char *fmt, ...);
+void fatalif( int expr, const char *fmt, ...);
 void info( const char *fmt, ...);
 void error( const char *fmt, ...);
 void warn( const char *fmt, ...);

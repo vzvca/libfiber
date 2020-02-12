@@ -389,10 +389,17 @@ int sched_free( scheduler_t *sched );
 
 /*
  * ---------------------------------------------------------------------------
- * Start running a scheduler at the given frequency
+ * Stops all fibers.
+ *
+ * This function is used to stop all the fibers at once, for example when
+ * the program exits.
+ *
+ * A call to sched_cycle() is required to really free the resources
+ * used by fibers because the call to "fiber_term()" and "fiber_done()"
+ * functions which are meant to release resources used by fibers.
  * ---------------------------------------------------------------------------
  */
-void sched_run( uint32_t period );
+void sched_stop( scheduler_t *sched );
 
 /*
  * ---------------------------------------------------------------------------

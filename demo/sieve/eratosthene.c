@@ -23,72 +23,18 @@
  */
 
 #include "task.h"
+#include "logger.h"
 
-typedef struct channel_st channel_t;
+#include <stdio.h>
+#include <stdlib.h>
+#include <stddef.h>
 
-/*
- * --------------------------------------------------------------------------
- *  channel_t structure
- * --------------------------------------------------------------------------
- */
-struct channel_st {
-  size_t     szelem;     /* size of an element */
-  size_t     nbelem;     /* size in elements of the input ring */
-  size_t     start;      /* index of next element to read */
-  size_t     end;        /* index of last element to read */
-  size_t     stride;     /* used to walk in 'data' */
-  char       data[1];    /* contains nb elem elements of size szelem */
-};
-
-channel_t *channel_new( size_t szelem, size_t nbelem )
-{
-  channel_t *chan;
-  
-  if ( nbelem < 1 ) {
-    nbelem = 1;
-  }
-  if ( szelem < 1 ) {
-    szelem = 1;
-  }
-  chan = (channel_t*) malloc( sizeof(channel_t) + nbelem*szelem -1 );
-  if ( chan == NULL ) {
-    return NULL;
-  }
-
-  chan->szelem = chan->stride = szelem;
-  chan->nbelem = nbelem;
-  chan->start = chan->end = 0;
-  
-  return chan;
-}
-
-void channel_free( channel_t *chan )
-{
-  free( chan );
-}
-
-void channel_send( fiber_t *fiber, channel_t *chan, char *data )
-{
-  int idx;
-  if ( (chan->end - chan->start) >= chan->nbelem ) {
-    fiber_wait_for_cond( fiber, fiber_check_can_send, chan );
-  }
-  idx = chan->stride * (chan->end % chan->nbelem);
-  memcpy( chan->data + idx, data, chan->szelem );
-  chan->end ++;
-}
-
-void channel_recv( fiber_t *fiber, channel_t *chan, message_t *msg )
-{
-  if ( chan->end == chan->start ) {
-    fiber_wait_for_cond( fiber, fiber_check_can_recv, chan );
-  }
-  idx = chan->stride * (chan->start % chan->nbelem);
-  if ( msg->addrin != NULL ) {
-    memcpy( msg->addrin, chan->data + idx, chan->szelem );
-  }
-  chan->start ++;  
-}
+// @todo: will go th header
+typedef struct channel channel_t;
+channel_t *channel_new( size_t szelem, size_t nbelem );
+void channel_free( channel_t *chan );
+void channel_send( fiber_t *fiber, channel_t *chan, char *data );
+void channel_recv( fiber_t *fiber, channel_t *chan, char *data );
 
 
 /*
@@ -114,7 +60,6 @@ typedef struct {
   fiber_t   *source;      /* integer stream generator */
   int        n;           /* used to filter output of 'source' */
 } extra_t;
-
 
 /*
  * --------------------------------------------------------------------------
@@ -147,7 +92,7 @@ fiber_t *generator_new( fiber_t *source, pf_run_t task_func, int n)
     fatalif( sched == NULL, "scheduler null" );
   }
   else {
-    sched = scheduler_new();
+    sched = sched_new();
   }
  
   extra = (extra_t*) malloc( sizeof(extra_t) );
@@ -168,8 +113,11 @@ fiber_t *generator_new( fiber_t *source, pf_run_t task_func, int n)
   fiber = fiber_new( task_func, extra );
   fatalif ( fiber == NULL, "memory allocation error !\n");
 
-  fiber_set_stack_size( fiber, 2048 );
-  fiber_start( fiber, sched );
+  fiber_set_stack_size( fiber, 4096 );
+  fiber_set_done_func( fiber, generator_done );
+  fiber_start( sched, fiber );
+
+  return fiber;
 }
 
 /*
@@ -185,7 +133,7 @@ int next_integer( fiber_t *fiber )
   int n = 0;
   
   /* send a pointer to the channel to use to send back result */
-  channel_send( fiber, xsource->call_chan, xfiber->return_chan );
+  channel_send( fiber, xsource->call_chan, (char*) &xfiber->return_chan );
 
   /* wait for answer and return it */
   channel_recv( fiber, xfiber->return_chan, (char*) &n );
@@ -201,7 +149,7 @@ int receive( fiber_t *fiber )
 {
   extra_t *extra = (extra_t*) fiber_get_extra(fiber);
   extra->reply_chan = NULL;
-  channel_recv( fiber, extra->call_chan, &extra->reply_chan );
+  channel_recv( fiber, extra->call_chan, (char*) &extra->reply_chan );
   return (extra->reply_chan != NULL);
 }
 
@@ -213,7 +161,7 @@ int receive( fiber_t *fiber )
 void send( fiber_t *fiber, int x )
 {
   extra_t *extra = (extra_t*) fiber_get_extra(fiber);
-  channel_send( fiber, extra->reply_chan, (char*) &i);
+  channel_send( fiber, extra->reply_chan, (char*) &x);
 }
 
 
@@ -251,7 +199,7 @@ void filter_by_factor_task( fiber_t *fiber )
  */
 void all_numbers_task( fiber_t * fiber )
 {
-  int x = 1;
+  int x = 2;
   /* wait for being called */
   while( receive( fiber ) ) {
     send( fiber, x++ );
@@ -285,8 +233,8 @@ void eratosthene_task( fiber_t *fiber )
 void main_task( fiber_t *fiber )
 {
   int i;
-  for( i = 0; i <= 20; ++i ) {
-    printf("prime#%d = %d\n", i, next_integer( i ));
+  for( i = 1; i <= 20; ++i ) {
+    printf("prime#%d = %d\n", i, next_integer( fiber ));
   }
   /* tell it is the end */
   done = 1;
