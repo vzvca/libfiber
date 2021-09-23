@@ -600,24 +600,19 @@ int fiber_wait_for_cond( fiber_t *fiber, uint32_t msec, pf_check_t pfun, void *p
   return FIBER_OK;
 }
 
+struct join_check_data {
+  fiber_t *other;
+  int fid;
+};
+
 /* ----------------------------------------------------------------------------
  * Check function used during join operation
  * ----------------------------------------------------------------------------*/
 static int fiber_join_check( fiber_t *fiber, void *data)
 {
-  fiber_t*  other  = (fiber_t*) data;
+  struct join_check_data *jdata  = (fiber_t*) data;
   fiber_t** fibers = fiber->scheduler->fibers;
-
-  /* try to find the fiber in hashtable */
-  uint32_t h = fiberHash(other) % ARRAYSIZE;
-  while ( fibers[h] ) {
-    if ( fibers[h] == other ) {
-      return 0;
-    }
-    h = (h+1) % ARRAYSIZE;
-  }
-  
-  return 1;
+  return ( fibers[jdata->fid] != jdata->other );
 }
 
 /* ----------------------------------------------------------------------------
@@ -627,7 +622,8 @@ static int fiber_join_check( fiber_t *fiber, void *data)
 int fiber_join( fiber_t *fiber, uint32_t msec, fiber_t *other)
 {
   predicate_t pred;
-
+  struct join_check_data jdata;
+  
   /* check argument */
   if ( other == NULL ) {
     /* if bad - yield and return error */
@@ -647,7 +643,9 @@ int fiber_join( fiber_t *fiber, uint32_t msec, fiber_t *other)
   else {
     pred.deadline = 0;
   }
-  pred.data = (void*) other;
+  jdata.other = other;
+  jdata.fid = other->fid;
+  pred.data = (void*) &jdata;
   pred.pf_check = &fiber_join_check;
 
   /* link fiber to predicate */
